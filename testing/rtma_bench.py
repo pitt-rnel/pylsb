@@ -74,7 +74,6 @@ def subscriber_loop(sub_id, num_msgs, msg_size, server='127.0.0.1:7111'):
                 toc = time.perf_counter()
                 msg_count += 1
             elif msg.msg_name == 'EXIT':
-                print('Got EXIT')
                 break
             
         if time.perf_counter() - abort_start > abort_timeout: 

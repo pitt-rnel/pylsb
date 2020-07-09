@@ -143,11 +143,12 @@ class rtmaClient(object):
         if not self.connected and not ack:
             raise Exception("rtmaClient is not connected to Message Manager")
 
-        msg = Message()
-        msg.rtma_header = self._read_header(timeout=timeout)
-        if msg.rtma_header is None:
+        header = self._read_header(timeout=timeout)
+        if header is None:
             return None
         
+        msg = Message()
+        msg.rtma_header = header
         msg.rtma_header.recv_time = time.perf_counter()
         msg.msg_size = rtma.constants['HEADER_SIZE'] + msg.rtma_header.num_data_bytes
         msg.msg_name = rtma.MT_BY_ID[msg.rtma_header.msg_type]

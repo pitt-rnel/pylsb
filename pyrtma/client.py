@@ -53,6 +53,8 @@ class rtmaClient(object):
                     socket.TCP_NODELAY,
                     1)
             
+            self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
             msg = Message(msg_name='CONNECT')
             msg.data.logger_status = int(logger_status)
             msg.data.daemon_status = int(daemon_status)
@@ -160,15 +162,14 @@ class rtmaClient(object):
         if msg.rtma_header.num_data_bytes > 0:
             # Always wait for the data after a header
             # readfds, writefds, exceptfds = select.select([self.sock],[], [])
-
-            if readfds:
-                msg.data = getattr(rtma, msg.msg_name)()
-                view = memoryview(msg.data).cast('b')
-                bytes_read = 0
-                while bytes_read < msg.rtma_header.num_data_bytes:
-                    nbytes = self.sock.recv_into(view)
-                    bytes_read += nbytes
-                    view = view[bytes_read:]
+            # if readfds:
+            msg.data = getattr(rtma, msg.msg_name)()
+            view = memoryview(msg.data).cast('b')
+            bytes_read = 0
+            while bytes_read < msg.rtma_header.num_data_bytes:
+                nbytes = self.sock.recv_into(view)
+                bytes_read += nbytes
+                view = view[bytes_read:]
 
         return msg
 		

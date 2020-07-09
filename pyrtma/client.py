@@ -105,8 +105,8 @@ class rtmaClient(object):
         self.send_message(signal, dest_mod_id, dest_host_id)
 
     def send_message(self, msg, dest_mod_id=0, dest_host_id=0):
-        if not self.connected and msg.msg_name != 'CONNECT':
-            raise Exception("rtmaClient is not connected to Message Manager")
+        # if not self.connected and msg.msg_name != 'CONNECT':
+        #     raise Exception("rtmaClient is not connected to Message Manager")
 
         # Verify that the module & host ids are valid
         if dest_mod_id < 0 or dest_mod_id > rtma.constants['MAX_MODULES']:
@@ -137,11 +137,11 @@ class rtmaClient(object):
             view = view[res:]
             bytes_sent += res
 
-        debug_print(f"Sent {msg.msg_name}")
+        # debug_print(f"Sent {msg.msg_name}")
 
     def read_message(self, timeout=-1, ack=False):
-        if not self.connected and not ack:
-            raise Exception("rtmaClient is not connected to Message Manager")
+        # if not self.connected and not ack:
+        #     raise Exception("rtmaClient is not connected to Message Manager")
 
         header = self._read_header(timeout=timeout)
         if header is None:
@@ -164,29 +164,26 @@ class rtmaClient(object):
         else:
             readfds, writefds, exceptfds = select.select([self.sock],[], [])
 
-        if len(readfds) == 0:
+        if readfds:
+            buf = bytearray(nbytes_to_read)
+            view = memoryview(buf)
+            while nbytes_to_read:
+                nbytes = self.sock.recv_into(view, nbytes_to_read)
+                view = view[nbytes:]
+                nbytes_to_read -= nbytes
+
+            return buf
+        else:
             return None
 
-        buf = bytearray(nbytes_to_read)
-        view = memoryview(buf)
-        while nbytes_to_read:
-            nbytes = self.sock.recv_into(view, nbytes_to_read)
-            view = view[nbytes:]
-            nbytes_to_read -= nbytes
-
-        return buf
-
     def _read_header(self, timeout=0):
-        nbytes_to_read = rtma.constants['HEADER_SIZE']
-        buf = self._read(nbytes_to_read, timeout=timeout)
+        buf = self._read(rtma.constants['HEADER_SIZE'], timeout=timeout)
         if buf is None:
             return None
         else:
             return rtma.RTMA_MSG_HEADER.from_buffer(buf)
 
     def _read_data(self, msg, timeout=-1):
-        if msg.rtma_header.num_data_bytes <= 0:
-            return b''
         buf = self._read(msg.rtma_header.num_data_bytes, timeout=timeout)
         msg.data = getattr(rtma, msg.msg_name).from_buffer(buf)
 

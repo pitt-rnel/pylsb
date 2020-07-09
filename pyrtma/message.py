@@ -51,13 +51,6 @@ class Message(object):
                 self.msg_size += ctypes.sizeof(self.data)
                 self.rtma_header.num_data_bytes = ctypes.sizeof(self.data)
 
-    def pack(self):
-        raw_packet = bytearray(self.msg_size)
-        raw_packet[:constants['HEADER_SIZE']] = self.rtma_header
-        if self.data is not None:
-            raw_packet[constants['HEADER_SIZE']:] = self.data
-        return raw_packet
-
     def __repr__(self):
         s = f'Type:\t{self.msg_name}\n'
         s+= '---Header---\n'

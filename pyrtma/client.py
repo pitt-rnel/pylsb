@@ -105,9 +105,6 @@ class rtmaClient(object):
         self.send_message(signal, dest_mod_id, dest_host_id)
 
     def send_message(self, msg, dest_mod_id=0, dest_host_id=0):
-        # if not self.connected and msg.msg_name != 'CONNECT':
-        #     raise Exception("rtmaClient is not connected to Message Manager")
-
         # Verify that the module & host ids are valid
         if dest_mod_id < 0 or dest_mod_id > rtma.constants['MAX_MODULES']:
             raise Exception(f"rtmaClient::send_message: Got invalid dest_mod_id [{dest_mod_id}]")
@@ -128,65 +125,53 @@ class rtmaClient(object):
         self.msg_count+= 1
 
     def _send(self, msg):
-        bytes_sent = 0
-        raw_packet = msg.pack()
-        view = memoryview(raw_packet)
-        packet_size = len(raw_packet)
-        while bytes_sent < packet_size:
-            res = self.sock.send(view)
-            view = view[res:]
-            bytes_sent += res
-
-        # debug_print(f"Sent {msg.msg_name}")
-
-    def read_message(self, timeout=-1, ack=False):
-        # if not self.connected and not ack:
-        #     raise Exception("rtmaClient is not connected to Message Manager")
-
-        header = self._read_header(timeout=timeout)
-        if header is None:
-            return None
-        
-        msg = Message()
-        msg.rtma_header = header
-        msg.rtma_header.recv_time = time.perf_counter()
-        msg.msg_size = rtma.constants['HEADER_SIZE'] + msg.rtma_header.num_data_bytes
-        msg.msg_name = rtma.MT_BY_ID[msg.rtma_header.msg_type]
+        self.sock.sendall(msg.rtma_header)
 
         if msg.rtma_header.num_data_bytes > 0:
-            self._read_data(msg)
+            self.sock.sendall(msg.data)
 
-        return msg
-		
-    def _read(self, nbytes_to_read, timeout):
+       # debug_print(f"Sent {msg.msg_name}")
+
+    def read_message(self, timeout=-1, ack=False):
         if timeout >= 0:
             readfds, writefds, exceptfds = select.select([self.sock],[], [], timeout)
         else:
-            readfds, writefds, exceptfds = select.select([self.sock],[], [])
+            readfds, writefds, exceptfds = select.select([self.sock],[], []) # blocking
 
+        # Read RTMA Header Section
         if readfds:
-            buf = bytearray(nbytes_to_read)
-            view = memoryview(buf)
-            while nbytes_to_read:
-                nbytes = self.sock.recv_into(view, nbytes_to_read)
-                view = view[nbytes:]
-                nbytes_to_read -= nbytes
+            msg = Message()
+            msg.rtma_header = rtma.RTMA_MSG_HEADER() 
 
-            return buf
+            view = memoryview(msg.rtma_header).cast('b')
+            bytes_read = 0
+            while bytes_read < rtma.constants['HEADER_SIZE']:
+                nbytes = self.sock.recv_into(view)
+                bytes_read += nbytes
+                view = view[bytes_read:]
+
+            msg.rtma_header.recv_time = time.perf_counter()
+            msg.msg_name = rtma.MT_BY_ID[msg.rtma_header.msg_type]
+            msg.msg_size = rtma.constants['HEADER_SIZE'] + msg.rtma_header.num_data_bytes
         else:
             return None
 
-    def _read_header(self, timeout=0):
-        buf = self._read(rtma.constants['HEADER_SIZE'], timeout=timeout)
-        if buf is None:
-            return None
-        else:
-            return rtma.RTMA_MSG_HEADER.from_buffer(buf)
+        # Read Data Section
+        if msg.rtma_header.num_data_bytes > 0:
+            # Always wait for the data after a header
+            # readfds, writefds, exceptfds = select.select([self.sock],[], [])
 
-    def _read_data(self, msg, timeout=-1):
-        buf = self._read(msg.rtma_header.num_data_bytes, timeout=timeout)
-        msg.data = getattr(rtma, msg.msg_name).from_buffer(buf)
+            if readfds:
+                msg.data = getattr(rtma, msg.msg_name)()
+                view = memoryview(msg.data).cast('b')
+                bytes_read = 0
+                while bytes_read < msg.rtma_header.num_data_bytes:
+                    nbytes = self.sock.recv_into(view)
+                    bytes_read += nbytes
+                    view = view[bytes_read:]
 
+        return msg
+		
     def wait_for_acknowledgement(self, timeout=3):
         ret = 0;
         debug_print("Waiting for ACK... ")
@@ -194,20 +179,22 @@ class rtmaClient(object):
         # Wait Forever
         if timeout == -1: 
             while True:
-                M = self.read_message(ack=True) 
-                if M is not None and M.rtma_header.msg_type == rtma.MT['ACKNOWLEDGE']:
-                    break
-            debug_print( "Got ACK!");
-            return M
+                msg = self.read_message(ack=True) 
+                if msg is not None:
+                    if msg.rtma_header.msg_type == rtma.MT['ACKNOWLEDGE']:
+                        break
+                        debug_print( "Got ACK!");
+            return msg
         else:
            # Wait up to timeout seconds
             time_remaining = timeout
             start_time = time.perf_counter()
             while time_remaining > 0:
-                M = self.read_message(timeout=time_remaining, ack=True);
-                if M is not None and M.rtma_header.msg_type == rtma.MT['ACKNOWLEDGE']:
-                    debug_print( "Got ACK!")
-                    return M 
+                msg = self.read_message(timeout=time_remaining, ack=True);
+                if msg is not None:
+                    if msg.rtma_header.msg_type == rtma.MT['ACKNOWLEDGE']:
+                        debug_print( "Got ACK!")
+                        return msg 
 
                 time_now = time.perf_counter()
                 time_waited = time_now - start_time;

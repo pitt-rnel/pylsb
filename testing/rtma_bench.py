@@ -65,7 +65,7 @@ def subscriber_loop(sub_id, num_msgs, msg_size, server='127.0.0.1:7111'):
 
     msg_count = 0
     while msg_count < num_msgs:
-        msg = mod.read_message(timeout=1)
+        msg = mod.read_message(timeout=-1)
         if msg is not None:
             if msg.msg_name == 'TEST':
                 if msg_count == 0:

@@ -1,6 +1,12 @@
 # pyrtma
 A python client for RTMA written in python with no external dependencies. Supports the most used features only.
 
+## Install
+From root directory of the repo:
+```shell
+$ pip install .
+```
+## Usage
 Create a module:
 ```python
 import pyrtma

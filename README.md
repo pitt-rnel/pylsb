@@ -3,13 +3,14 @@ A python client for RTMA written in python with no external dependencies. Suppor
 
 Create a module:
 ```python
-from pyrtma.client import rtmaClient
+import pyrtma
 
-mod = rtmaClient()
+mod = pyrtma.rtmaClient()
 mod.Connect('127.0.0.1:7111')
 ```
 
-See examples for pub/sub use case:
+See /examples for pub/sub use case:
+
 In one terminal run: 
 ```shell
 $ python example.py --pub

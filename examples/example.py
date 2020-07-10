@@ -2,8 +2,9 @@ import sys
 import ctypes
 
 sys.path.append('../')
-from pyrtma.client import rtmaClient
-from pyrtma.message import AddMessage, Message
+# from pyrtma.client import rtmaClient
+# from pyrtma.message import AddMessage, Message
+import pyrtma
 
 # Create a user defined message from a ctypes.Structure or basic ctypes
 class USER_MESSAGE(ctypes.Structure):
@@ -17,15 +18,15 @@ class USER_MESSAGE(ctypes.Structure):
 MT_USER_MESSAGE = 1234
 
 # Add the message definition to pyrtma.core module internal dictionary
-AddMessage(msg_name='USER_MESSAGE', msg_type=MT_USER_MESSAGE, msg_def=USER_MESSAGE)
+pyrtma.AddMessage(msg_name='USER_MESSAGE', msg_type=MT_USER_MESSAGE, msg_def=USER_MESSAGE)
 
 def publisher(server='127.0.0.1:7111'):
     # Setup Client
-    mod = rtmaClient()
+    mod = pyrtma.rtmaClient()
     mod.connect(server_name=server)
 
     # Build a packet to send
-    msg = Message('USER_MESSAGE')
+    msg = pyrtma.Message('USER_MESSAGE')
     py_string = b'Hello World'
     msg.data.str[:len(py_string)] = py_string
     msg.data.val = 123.456
@@ -45,7 +46,7 @@ def publisher(server='127.0.0.1:7111'):
 
 def subscriber(server='127.0.0.1:7111'):
     # Setup Client
-    mod = rtmaClient()
+    mod = pyrtma.rtmaClient()
     mod.connect(server_name=server)
 
     # Select the messages to receive

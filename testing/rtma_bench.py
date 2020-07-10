@@ -5,17 +5,15 @@ import os
 import multiprocessing
 
 sys.path.append('../')
-import pyrtma.core as rtma 
-from pyrtma.client import rtmaClient
-from pyrtma.message import Message, AddMessage
+import pyrtma
 
 def publisher_loop(pub_id=0, num_msgs=10000, msg_size=512, num_subscribers=1, ready_flag=None, server='127.0.0.1:7111'):
     # Register user defined message types
-    AddMessage(msg_name='TEST', msg_type=5000, msg_def=create_test_msg(msg_size))
-    AddMessage(msg_name='SUBSCRIBER_READY', msg_type=5001, signal=True)
+    pyrtma.AddMessage(msg_name='TEST', msg_type=5000, msg_def=create_test_msg(msg_size))
+    pyrtma.AddMessage(msg_name='SUBSCRIBER_READY', msg_type=5001, signal=True)
 
     # Setup Client
-    mod = rtmaClient()
+    mod = pyrtma.rtmaClient()
     mod.connect(server_name=server)
     mod.subscribe('SUBSCRIBER_READY') 
 
@@ -32,7 +30,7 @@ def publisher_loop(pub_id=0, num_msgs=10000, msg_size=512, num_subscribers=1, re
                 num_subscribers_ready += 1
 
     # Create TEST message with dummy data
-    msg = Message('TEST')
+    msg = pyrtma.Message('TEST')
     msg.data.data[:] = list(range(msg_size))
 
     # Send loop
@@ -50,11 +48,11 @@ def publisher_loop(pub_id=0, num_msgs=10000, msg_size=512, num_subscribers=1, re
 
 def subscriber_loop(sub_id, num_msgs, msg_size, server='127.0.0.1:7111'):
     # Register user defined message types
-    AddMessage(msg_name='TEST', msg_type=5000, msg_def=create_test_msg(msg_size))
-    AddMessage(msg_name='SUBSCRIBER_READY', msg_type=5001, signal=True)
+    pyrtma.AddMessage(msg_name='TEST', msg_type=5000, msg_def=create_test_msg(msg_size))
+    pyrtma.AddMessage(msg_name='SUBSCRIBER_READY', msg_type=5001, signal=True)
 
     # Setup Client
-    mod = rtmaClient()
+    mod = pyrtma.rtmaClient()
     mod.connect(server_name=server)
     mod.subscribe(['TEST', 'EXIT'])
     mod.send_signal('SUBSCRIBER_READY')
@@ -109,7 +107,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     #Main Thread RTMA client
-    mod = rtmaClient()
+    mod = pyrtma.rtmaClient()
     mod.connect(server_name=args.server)
 
     print("Initializing publisher processses...")
@@ -145,7 +143,7 @@ if __name__ == '__main__':
         subscribers[n].start()
 
     print("Starting Test...")
-    print(f"RTMA packet size: {rtma.constants['HEADER_SIZE'] + args.msg_size}")
+    print(f"RTMA packet size: {pyrtma.constants['HEADER_SIZE'] + args.msg_size}")
     print(f'Sending {args.num_msgs} messages...')
 
     # Wait for publishers to finish

@@ -1,24 +1,4 @@
-import sys
 from pyrtma.core import *
-
-module = sys.modules['pyrtma.core']
-
-def AddMessage(msg_name, msg_type, msg_def=None, signal=False):
-    '''Add a user message definition to the rtma module'''
-    mt = getattr(module, 'MT')
-    mt[msg_name] = msg_type
-    mt_by_id = getattr(module, 'MT_BY_ID')
-    mt_by_id[msg_type] = msg_name
-
-    if not signal:
-        setattr(module, msg_name, msg_def)
-    else:
-        setattr(module, msg_name, MSG_TYPE)
-
-
-def AddSignal(msg_name, msg_type):
-    AddMessage(msg_name, msg_type, msg_def=None, signal=True)
-
 
 def bytes2str(raw_bytes):
     '''Helper to convert a ctypes bytes array of null terminated strings to a
@@ -52,6 +32,9 @@ class Message(object):
                 self.rtma_header.num_data_bytes = ctypes.sizeof(self.data)
 
     def __repr__(self):
+        if self.rtma_header is None:
+            return 'Empty Message'
+
         s = f'Type:\t{self.msg_name}\n'
         s+= '---Header---\n'
         for name, ctype in self.rtma_header._fields_:

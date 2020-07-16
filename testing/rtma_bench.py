@@ -1,7 +1,6 @@
 import sys
 import ctypes
 import time
-import os
 import multiprocessing
 
 sys.path.append('../')
@@ -15,6 +14,7 @@ def publisher_loop(pub_id=0, num_msgs=10000, msg_size=512, num_subscribers=1, re
     # Setup Client
     mod = pyrtma.rtmaClient()
     mod.connect(server_name=server)
+    mod.send_module_ready()
     mod.subscribe('SUBSCRIBER_READY') 
 
     # Signal that publisher is ready
@@ -40,8 +40,9 @@ def publisher_loop(pub_id=0, num_msgs=10000, msg_size=512, num_subscribers=1, re
     toc = time.perf_counter()
 
     # Stats
-    data_rate = msg.msg_size * num_msgs / float(1048576) / (toc-tic)
-    print(f"Publisher[{pub_id}] -> {num_msgs} messages | {int((num_msgs)/toc-tic)} messages/sec | {data_rate:0.1f} MB/sec | {toc-tic:0.6f} sec ")
+    dur = toc - tic
+    data_rate = msg.msg_size * num_msgs / float(1048576) / dur
+    print(f"Publisher[{pub_id}] -> {num_msgs} messages | {int(num_msgs/dur)} messages/sec | {data_rate:0.1f} MB/sec | {dur:0.6f} sec ")
 
     mod.disconnect()
 
@@ -54,6 +55,7 @@ def subscriber_loop(sub_id, num_msgs, msg_size, server='127.0.0.1:7111'):
     # Setup Client
     mod = pyrtma.rtmaClient()
     mod.connect(server_name=server)
+    mod.send_module_ready()
     mod.subscribe(['TEST', 'EXIT'])
     mod.send_signal('SUBSCRIBER_READY')
 
@@ -79,11 +81,12 @@ def subscriber_loop(sub_id, num_msgs, msg_size, server='127.0.0.1:7111'):
             break
 
     # Stats
-    data_rate = (test_msg_size * num_msgs) / float(1048576) / (toc-tic)
+    dur = toc - tic
+    data_rate = (test_msg_size * num_msgs) / float(1048576) / dur
     if msg_count == num_msgs:
-        print(f"Subscriber [{sub_id:d}] -> {msg_count} messages | {int((msg_count-1)/toc-tic)} messages/sec | {data_rate:0.1f} MB/sec | {toc-tic:0.6f} sec ")
+        print(f"Subscriber [{sub_id:d}] -> {msg_count} messages | {int((msg_count-1)/dur)} messages/sec | {data_rate:0.1f} MB/sec | {dur:0.6f} sec ")
     else:
-        print(f"Subscriber [{sub_id:d}] -> {msg_count} ({int(msg_count/num_msgs *100):0d}%) messages | {int((msg_count-1)/toc-tic)} messages/sec | {data_rate:0.1f} MB/sec | {toc-tic:0.6f} sec ")
+        print(f"Subscriber [{sub_id:d}] -> {msg_count} ({int(msg_count/num_msgs *100):0d}%) messages | {int((msg_count-1)/dur)} messages/sec | {data_rate:0.1f} MB/sec | {dur:0.6f} sec ")
 
     mod.disconnect()
 
@@ -109,6 +112,7 @@ if __name__ == '__main__':
     #Main Thread RTMA client
     mod = pyrtma.rtmaClient()
     mod.connect(server_name=args.server)
+    mod.send_module_ready()
 
     print("Initializing publisher processses...")
     publisher_ready = []

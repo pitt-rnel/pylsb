@@ -123,10 +123,10 @@ class rtmaClient(object):
         msg.rtma_header.dest_host_id = dest_host_id;
         msg.rtma_header.dest_mod_id = dest_mod_id;	
 
-        self.sock.sendall(msg.rtma_header)
-
         if msg.rtma_header.num_data_bytes > 0:
-            self.sock.sendall(msg.data)
+            self.sock.sendall(bytes(msg_rtma_header) + bytes(msg.data))
+        else:
+            self.sock.sendall(msg.rtma_header)
 
        # debug_print(f"Sent {msg.msg_name}")
         self.msg_count+= 1

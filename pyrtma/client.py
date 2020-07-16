@@ -1,6 +1,8 @@
 import socket
 import select
 import time
+import os
+
 import pyrtma.core as rtma
 from pyrtma.message import Message
 
@@ -124,7 +126,7 @@ class rtmaClient(object):
         msg.rtma_header.dest_mod_id = dest_mod_id;	
 
         if msg.rtma_header.num_data_bytes > 0:
-            self.sock.sendall(bytes(msg_rtma_header) + bytes(msg.data))
+            self.sock.sendall(bytes(msg.rtma_header) + bytes(msg.data))
         else:
             self.sock.sendall(msg.rtma_header)
 

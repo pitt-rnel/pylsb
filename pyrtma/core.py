@@ -154,6 +154,9 @@ MT_BY_ID = {}
 for key, value in MT.items():
     MT_BY_ID[value] = key
 
+del key
+del value
+
 module = sys.modules['pyrtma.core']
 
 def AddMessage(msg_name, msg_type, msg_def=None, signal=False):

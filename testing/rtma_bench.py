@@ -103,7 +103,7 @@ if __name__ == '__main__':
     # Configuration flags for bench utility
     parser = argparse.ArgumentParser(description='rtmaClient bench test utility')
     parser.add_argument('-ms', default=128, type=int, dest='msg_size', help='Messge size in bytes.')
-    parser.add_argument('-n', default=10000, type=int, dest='num_msgs', help='Number of messages.')
+    parser.add_argument('-n', default=100000, type=int, dest='num_msgs', help='Number of messages.')
     parser.add_argument('-np', default=1, type=int, dest='num_publishers', help='Number of concurrent publishers.')
     parser.add_argument('-ns', default=1, type=int, dest='num_subscribers', help='Number of concurrent subscribers.')
     parser.add_argument('-s',default='127.0.0.1:7111', dest='server', help='RTMA message manager ip address (default: 127.0.0.1:7111)')

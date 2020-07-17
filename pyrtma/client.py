@@ -104,9 +104,9 @@ class rtmaClient(object):
     def resume_subscription(self):
         self._subscription_control(msg_list, 'RESUME_SUBSCRIPTION')
 
-    def send_signal(self, signal_name, dest_mod_id=0, dest_host_id=0):
+    def send_signal(self, signal_name, dest_mod_id=0, dest_host_id=0, timeout=-1):
         signal = Message(msg_name=signal_name, signal=True)
-        self.send_message(signal, dest_mod_id, dest_host_id)
+        self.send_message(signal, dest_mod_id, dest_host_id, timeout)
 
     def send_message(self, msg, dest_mod_id=0, dest_host_id=0, timeout=-1):
         # Verify that the module & host ids are valid
@@ -132,12 +132,13 @@ class rtmaClient(object):
         
         if writefds:
             if msg.rtma_header.num_data_bytes > 0:
-                self.sock.sendall(bytes(msg.rtma_header) + bytes(msg.data))
+               self.sock.sendall(bytes(msg.rtma_header) + bytes(msg.data))
             else:
                 self.sock.sendall(msg.rtma_header)
 
            # debug_print(f"Sent {msg.msg_name}")
             self.msg_count+= 1
+
         else:
             # Socket was not ready to receive data. Drop the packet.
             print('x', end='')

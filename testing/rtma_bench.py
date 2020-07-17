@@ -6,10 +6,16 @@ import multiprocessing
 sys.path.append('../')
 import pyrtma
 
-def publisher_loop(pub_id=0, num_msgs=10000, msg_size=512, num_subscribers=1, ready_flag=None, server='127.0.0.1:7111'):
+def publisher_loop(pub_id=0, num_msgs=10000, msg_size=128, num_subscribers=1, server='127.0.0.1:7111'):
     # Register user defined message types
-    pyrtma.AddMessage(msg_name='TEST', msg_type=5000, msg_def=create_test_msg(msg_size))
-    pyrtma.AddMessage(msg_name='SUBSCRIBER_READY', msg_type=5001, signal=True)
+    if msg_size > 0:
+        pyrtma.AddMessage(msg_name='TEST', msg_type=5000, msg_def=create_test_msg(msg_size))
+    else:
+        pyrtma.AddSignal(msg_name='TEST', msg_type=5000)
+
+    pyrtma.AddSignal(msg_name='PUBLISHER_READY', msg_type=5001)
+    pyrtma.AddSignal(msg_name='PUBLISHER_DONE', msg_type=5002)
+    pyrtma.AddSignal(msg_name='SUBSCRIBER_READY', msg_type=5003)
 
     # Setup Client
     mod = pyrtma.rtmaClient()
@@ -18,8 +24,7 @@ def publisher_loop(pub_id=0, num_msgs=10000, msg_size=512, num_subscribers=1, re
     mod.subscribe('SUBSCRIBER_READY') 
 
     # Signal that publisher is ready
-    if ready_flag is not None:
-        ready_flag.set()
+    mod.send_signal('PUBLISHER_READY')
 
     # Wait for the subscribers to be ready
     num_subscribers_ready = 0
@@ -31,7 +36,8 @@ def publisher_loop(pub_id=0, num_msgs=10000, msg_size=512, num_subscribers=1, re
 
     # Create TEST message with dummy data
     msg = pyrtma.Message('TEST')
-    msg.data.data[:] = list(range(msg_size))
+    if msg_size > 0:
+        msg.data.data[:] = list(range(msg_size))
 
     # Send loop
     tic = time.perf_counter()
@@ -39,18 +45,23 @@ def publisher_loop(pub_id=0, num_msgs=10000, msg_size=512, num_subscribers=1, re
         mod.send_message(msg)
     toc = time.perf_counter()
 
+    mod.send_signal('PUBLISHER_DONE')
+
     # Stats
     dur = toc - tic
     data_rate = msg.msg_size * num_msgs / float(1048576) / dur
     print(f"Publisher[{pub_id}] -> {num_msgs} messages | {int(num_msgs/dur)} messages/sec | {data_rate:0.1f} MB/sec | {dur:0.6f} sec ")
 
-    mod.disconnect()
 
-
-def subscriber_loop(sub_id, num_msgs, msg_size, server='127.0.0.1:7111'):
+def subscriber_loop(sub_id=0, num_msgs=100000, msg_size=128, server='127.0.0.1:7111'):
     # Register user defined message types
-    pyrtma.AddMessage(msg_name='TEST', msg_type=5000, msg_def=create_test_msg(msg_size))
-    pyrtma.AddMessage(msg_name='SUBSCRIBER_READY', msg_type=5001, signal=True)
+    if msg_size > 0:
+        pyrtma.AddMessage(msg_name='TEST', msg_type=5000, msg_def=create_test_msg(msg_size))
+    else:
+        pyrtma.AddSignal(msg_name='TEST', msg_type=5000)
+
+    pyrtma.AddSignal(msg_name='SUBSCRIBER_READY', msg_type=5003)
+    pyrtma.AddSignal(msg_name='SUBSCRIBER_DONE', msg_type=5004)
 
     # Setup Client
     mod = pyrtma.rtmaClient()
@@ -60,9 +71,6 @@ def subscriber_loop(sub_id, num_msgs, msg_size, server='127.0.0.1:7111'):
     mod.send_signal('SUBSCRIBER_READY')
 
     # Read Loop (Start clock after first TEST msg received)
-    abort_timeout = max(num_msgs/10000, 10) #seconds
-    abort_start = time.perf_counter()
-
     msg_count = 0
     while msg_count < num_msgs:
         msg = mod.read_message(timeout=-1)
@@ -76,9 +84,7 @@ def subscriber_loop(sub_id, num_msgs, msg_size, server='127.0.0.1:7111'):
             elif msg.msg_name == 'EXIT':
                 break
             
-        if time.perf_counter() - abort_start > abort_timeout: 
-            print(f"Subscriber [{sub_id:d}] Timed out.")
-            break
+    mod.send_signal('SUBSCRIBER_DONE')
 
     # Stats
     dur = toc - tic
@@ -88,7 +94,6 @@ def subscriber_loop(sub_id, num_msgs, msg_size, server='127.0.0.1:7111'):
     else:
         print(f"Subscriber [{sub_id:d}] -> {msg_count} ({int(msg_count/num_msgs *100):0d}%) messages | {int((msg_count-1)/dur)} messages/sec | {data_rate:0.1f} MB/sec | {dur:0.6f} sec ")
 
-    mod.disconnect()
 
 
 def create_test_msg(msg_size):
@@ -114,11 +119,19 @@ if __name__ == '__main__':
     mod.connect(server_name=args.server)
     mod.send_module_ready()
 
+    pyrtma.AddSignal(msg_name='PUBLISHER_READY', msg_type=5001)
+    pyrtma.AddSignal(msg_name='PUBLISHER_DONE', msg_type=5002)
+    pyrtma.AddSignal(msg_name='SUBSCRIBER_READY', msg_type=5003)
+    pyrtma.AddSignal(msg_name='SUBSCRIBER_DONE', msg_type=5004)
+
+    mod.subscribe('PUBLISHER_READY')
+    mod.subscribe('PUBLISHER_DONE')
+    mod.subscribe('SUBSCRIBER_READY')
+    mod.subscribe('SUBSCRIBER_READY')
+
     print("Initializing publisher processses...")
-    publisher_ready = []
     publishers = []
     for n in range(args.num_publishers):
-        publisher_ready.append(multiprocessing.Event())
         publishers.append(
                 multiprocessing.Process(
                     target=publisher_loop,
@@ -127,14 +140,17 @@ if __name__ == '__main__':
                         'num_msgs': int(args.num_msgs/args.num_publishers),
                         'msg_size': args.msg_size, 
                         'num_subscribers': args.num_subscribers,
-                        'ready_flag': publisher_ready[n],
                         'server': args.server})
                     )
         publishers[n].start()
 
     # Wait for publisher processes to be established
-    for flag in publisher_ready:
-        flag.wait()
+    publishers_ready = 0
+    while publishers_ready < args.num_publishers:
+        msg = mod.read_message(timeout=-1)
+        if msg is not None:
+            if msg.msg_name == 'PUBLISHER_READY':
+                publishers_ready += 1
 
     print('Waiting for subscriber processes...')
     subscribers = []
@@ -142,36 +158,40 @@ if __name__ == '__main__':
         subscribers.append(
                 multiprocessing.Process(
                     target=subscriber_loop,
-                    args=(n+1, args.num_msgs, args.msg_size),
-                    kwargs={'server':args.server}))
+                    kwargs={
+                        'sub_id': n+1,
+                        'num_msgs': args.num_msgs,
+                        'msg_size': args.msg_size, 
+                        'server': args.server})
+                    )
         subscribers[n].start()
 
     print("Starting Test...")
     print(f"RTMA packet size: {pyrtma.constants['HEADER_SIZE'] + args.msg_size}")
     print(f'Sending {args.num_msgs} messages...')
 
-    # Wait for publishers to finish
-    for publisher in publishers:
-        publisher.join()
-
     # Wait for subscribers to finish
-    abort_timeout = max(args.num_msgs/10000, 10) #seconds
+    abort_timeout = max(args.num_msgs/1000, 10) #seconds
     abort_start = time.perf_counter()
-    abort = False
 
-    while not abort:
-        subscribers_finished = 0
-        for subscriber in subscribers:
-            if subscriber.exitcode is not None:
-                subscribers_finished += 1
+    subscribers_done = 0
+    publishers_done = 0
+    while (subscribers_done < args.num_subscribers) and (publishers_done < args.num_publishers):
+        msg = mod.read_message(timeout=0.100)
+        if msg is not None:
+            if msg.msg_name == 'SUBSCRIBER_DONE':
+                subscriber_done += 1
+            elif msg.msg_name == 'PUBLISHER_DONE':
+                publishers_done += 1
 
-        if subscribers_finished == len(subscribers):
-            break
-
-        if time.perf_counter() - abort_start > abort_timeout: 
+        if (time.perf_counter() - abort_start) > abort_timeout: 
+            time.sleep(1)
             mod.send_signal('EXIT')
             print('Test Timeout! Sending Exit Signal...')
-            abort = True
+            break
+
+    for publisher in publishers:
+        publisher.join()
 
     for subscriber in subscribers:
         subscriber.join()

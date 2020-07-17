@@ -108,7 +108,7 @@ class rtmaClient(object):
         signal = Message(msg_name=signal_name, signal=True)
         self.send_message(signal, dest_mod_id, dest_host_id)
 
-    def send_message(self, msg, dest_mod_id=0, dest_host_id=0):
+    def send_message(self, msg, dest_mod_id=0, dest_host_id=0, timeout=-1):
         # Verify that the module & host ids are valid
         if dest_mod_id < 0 or dest_mod_id > rtma.constants['MAX_MODULES']:
             raise Exception(f"rtmaClient::send_message: Got invalid dest_mod_id [{dest_mod_id}]")
@@ -125,13 +125,22 @@ class rtmaClient(object):
         msg.rtma_header.dest_host_id = dest_host_id;
         msg.rtma_header.dest_mod_id = dest_mod_id;	
 
-        if msg.rtma_header.num_data_bytes > 0:
-            self.sock.sendall(bytes(msg.rtma_header) + bytes(msg.data))
+        if timeout >= 0:
+            readfds, writefds, exceptfds = select.select([], [self.sock], [], timeout)
         else:
-            self.sock.sendall(msg.rtma_header)
+            readfds, writefds, exceptfds = select.select([], [self.sock], []) # blocking
+        
+        if writefds:
+            if msg.rtma_header.num_data_bytes > 0:
+                self.sock.sendall(bytes(msg.rtma_header) + bytes(msg.data))
+            else:
+                self.sock.sendall(msg.rtma_header)
 
-       # debug_print(f"Sent {msg.msg_name}")
-        self.msg_count+= 1
+           # debug_print(f"Sent {msg.msg_name}")
+            self.msg_count+= 1
+        else:
+            # Socket was not ready to receive data. Drop the packet.
+            print('x', end='')
 
     def read_message(self, timeout=-1, ack=False):
         if timeout >= 0:
@@ -145,12 +154,7 @@ class rtmaClient(object):
             msg.rtma_header = rtma.RTMA_MSG_HEADER() 
 
             view = memoryview(msg.rtma_header).cast('b')
-            bytes_read = 0
-            while bytes_read < rtma.constants['HEADER_SIZE']:
-                nbytes = self.sock.recv_into(view)
-                bytes_read += nbytes
-                view = view[bytes_read:]
-
+            nbytes = self.sock.recv_into(view, rtma.constants['HEADER_SIZE'], socket.MSG_WAITALL)
             msg.rtma_header.recv_time = time.perf_counter()
             msg.msg_name = rtma.MT_BY_ID[msg.rtma_header.msg_type]
             msg.msg_size = rtma.constants['HEADER_SIZE'] + msg.rtma_header.num_data_bytes
@@ -159,16 +163,9 @@ class rtmaClient(object):
 
         # Read Data Section
         if msg.rtma_header.num_data_bytes > 0:
-            # Always wait for the data after a header
-            # readfds, writefds, exceptfds = select.select([self.sock],[], [])
-            # if readfds:
             msg.data = getattr(rtma, msg.msg_name)()
             view = memoryview(msg.data).cast('b')
-            bytes_read = 0
-            while bytes_read < msg.rtma_header.num_data_bytes:
-                nbytes = self.sock.recv_into(view)
-                bytes_read += nbytes
-                view = view[bytes_read:]
+            nbytes = self.sock.recv_into(view, msg.rtma_header.num_data_bytes, socket.MSG_WAITALL)
 
         return msg
 		

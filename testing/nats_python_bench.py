@@ -4,91 +4,88 @@ import time
 import multiprocessing
 
 sys.path.append('../')
-import pyrtma
+from pynats import NATSClient
 
-def publisher_loop(pub_id=0, num_msgs=10000, msg_size=128, num_subscribers=1, server='127.0.0.1:7111'):
-    # Register user defined message types
-    if msg_size > 0:
-        pyrtma.AddMessage(msg_name='TEST', msg_type=5000, msg_def=create_test_msg(msg_size))
-    else:
-        pyrtma.AddSignal(msg_name='TEST', msg_type=5000)
-
-    pyrtma.AddSignal(msg_name='PUBLISHER_READY', msg_type=5001)
-    pyrtma.AddSignal(msg_name='PUBLISHER_DONE', msg_type=5002)
-    pyrtma.AddSignal(msg_name='SUBSCRIBER_READY', msg_type=5003)
-
+def publisher_loop(pub_id=0, num_msgs=100000, msg_size=128, num_subscribers=0, server='nats://127.0.0.1:4222'):
     # Setup Client
-    mod = pyrtma.rtmaClient()
-    mod.connect(server_name=server)
-    mod.send_module_ready()
-    mod.subscribe('SUBSCRIBER_READY') 
+    client = NATSClient(url=server)
+    client.connect()
+
+    reply_msg = []
+    def callback(message):
+        reply_msg.append(message)
+
+    client.subscribe('SUBSCRIBER_READY', callback=callback) 
 
     # Signal that publisher is ready
-    mod.send_signal('PUBLISHER_READY')
+    client.publish('PUBLISHER_READY')
 
     # Wait for the subscribers to be ready
     num_subscribers_ready = 0
     while num_subscribers_ready < num_subscribers:
-        msg = mod.read_message(timeout=-1)
-        if msg is not None:
-            if msg.msg_name == 'SUBSCRIBER_READY':
-                num_subscribers_ready += 1
+        client.wait(count=1)
+        re_msg = reply_msg.pop()
+        if re_msg.subject == 'SUBSCRIBER_READY':
+            num_subscribers_ready += 1
 
     # Create TEST message with dummy data
-    msg = pyrtma.Message('TEST')
+    msg = create_test_msg(msg_size)()
     if msg_size > 0:
-        msg.data.data[:] = list(range(msg_size))
+        msg.data[:] = list(range(msg_size))
 
     # Send loop
     tic = time.perf_counter()
     for n in range(num_msgs):
-        mod.send_message(msg)
+        client.publish('TEST', payload=bytes(msg))
     toc = time.perf_counter()
 
-    mod.send_signal('PUBLISHER_DONE')
+    client.publish('PUBLISHER_DONE')
+    
+    additional_bytes = b'PUB  00\r\n\r\n'
+    total_msg_size = len(additional_bytes) + ctypes.sizeof(msg)
 
     # Stats
     dur = toc - tic
-    data_rate = msg.msg_size * num_msgs / float(1048576) / dur
+    data_rate =  total_msg_size * num_msgs / float(1048576) / dur
     print(f"Publisher[{pub_id}] -> {num_msgs} messages | {int(num_msgs/dur)} messages/sec | {data_rate:0.1f} MB/sec | {dur:0.6f} sec ")
 
 
-def subscriber_loop(sub_id=0, num_msgs=100000, msg_size=128, server='127.0.0.1:7111'):
-    # Register user defined message types
-    if msg_size > 0:
-        pyrtma.AddMessage(msg_name='TEST', msg_type=5000, msg_def=create_test_msg(msg_size))
-    else:
-        pyrtma.AddSignal(msg_name='TEST', msg_type=5000)
-
-    pyrtma.AddSignal(msg_name='SUBSCRIBER_READY', msg_type=5003)
-    pyrtma.AddSignal(msg_name='SUBSCRIBER_DONE', msg_type=5004)
-
+def subscriber_loop(sub_id=0, num_msgs=100000, msg_size=128, server='nats://127.0.0.1:4222'):
     # Setup Client
-    mod = pyrtma.rtmaClient()
-    mod.connect(server_name=server)
-    mod.send_module_ready()
-    mod.subscribe(['TEST', 'EXIT'])
-    mod.send_signal('SUBSCRIBER_READY')
+    client = NATSClient(url=server)
+    client.connect()
+
+    reply_msg = []
+    def callback(message):
+        reply_msg.append(message)
+
+    client.subscribe('TEST', callback=callback)
+    client.subscribe('EXIT', callback=callback)
+    client.publish('SUBSCRIBER_READY')
 
     # Read Loop (Start clock after first TEST msg received)
     msg_count = 0
     while msg_count < num_msgs:
-        msg = mod.read_message(timeout=-1)
-        if msg is not None:
-            if msg.msg_name == 'TEST':
-                if msg_count == 0:
-                    test_msg_size = msg.msg_size
-                    tic = time.perf_counter()
-                toc = time.perf_counter()
-                msg_count += 1
-            elif msg.msg_name == 'EXIT':
-                break
+        client.wait(count=1)
+        msg = reply_msg.pop()
+
+        if msg.subject == 'TEST':
+            if msg_count == 0:
+                test_msg_size = len(msg.subject.encode()) + len(msg.reply.encode()) + len(msg.payload)
+                tic = time.perf_counter()
+            toc = time.perf_counter()
+            msg_count += 1
+        elif msg.subject == 'EXIT':
+            break
             
-    mod.send_signal('SUBSCRIBER_DONE')
+    client.publish('SUBSCRIBER_DONE')
 
     # Stats
+    additional_bytes = b'MSG 0 00\r\n\r\n'
+    total_msg_size = len(additional_bytes) + test_msg_size
+
     dur = toc - tic
-    data_rate = (test_msg_size * num_msgs) / float(1048576) / dur
+    data_rate = (total_msg_size * num_msgs) / float(1048576) / dur
     if msg_count == num_msgs:
         print(f"Subscriber [{sub_id:d}] -> {msg_count} messages | {int((msg_count-1)/dur)} messages/sec | {data_rate:0.1f} MB/sec | {dur:0.6f} sec ")
     else:
@@ -106,28 +103,26 @@ if __name__ == '__main__':
     import argparse
 
     # Configuration flags for bench utility
-    parser = argparse.ArgumentParser(description='rtmaClient bench test utility')
+    parser = argparse.ArgumentParser(description='pynats bench test utility')
     parser.add_argument('-ms', default=128, type=int, dest='msg_size', help='Messge size in bytes.')
     parser.add_argument('-n', default=100000, type=int, dest='num_msgs', help='Number of messages.')
     parser.add_argument('-np', default=1, type=int, dest='num_publishers', help='Number of concurrent publishers.')
     parser.add_argument('-ns', default=1, type=int, dest='num_subscribers', help='Number of concurrent subscribers.')
-    parser.add_argument('-s',default='127.0.0.1:7111', dest='server', help='RTMA message manager ip address (default: 127.0.0.1:7111)')
+    parser.add_argument('-s',default='nats://127.0.0.1:4222', dest='server', help='RTMA message manager ip address (default: 127.0.0.1:7111)')
     args = parser.parse_args()
 
-    #Main Thread RTMA client
-    mod = pyrtma.rtmaClient()
-    mod.connect(server_name=args.server)
-    mod.send_module_ready()
+    #Main Thread nats client
+    client = NATSClient(url=args.server)
+    client.connect()
 
-    pyrtma.AddSignal(msg_name='PUBLISHER_READY', msg_type=5001)
-    pyrtma.AddSignal(msg_name='PUBLISHER_DONE', msg_type=5002)
-    pyrtma.AddSignal(msg_name='SUBSCRIBER_READY', msg_type=5003)
-    pyrtma.AddSignal(msg_name='SUBSCRIBER_DONE', msg_type=5004)
+    reply_msg = []
+    def callback(message):
+        reply_msg.append(message)
 
-    mod.subscribe('PUBLISHER_READY')
-    mod.subscribe('PUBLISHER_DONE')
-    mod.subscribe('SUBSCRIBER_READY')
-    mod.subscribe('SUBSCRIBER_DONE')
+    client.subscribe('PUBLISHER_READY', callback=callback)
+    client.subscribe('PUBLISHER_DONE', callback=callback)
+    client.subscribe('SUBSCRIBER_READY', callback=callback)
+    client.subscribe('SUBSCRIBER_DONE', callback=callback)
 
     print("Initializing publisher processses...")
     publishers = []
@@ -147,10 +142,10 @@ if __name__ == '__main__':
     # Wait for publisher processes to be established
     publishers_ready = 0
     while publishers_ready < args.num_publishers:
-        msg = mod.read_message(timeout=-1)
-        if msg is not None:
-            if msg.msg_name == 'PUBLISHER_READY':
-                publishers_ready += 1
+        client.wait(count=1)
+        msg = reply_msg.pop()
+        if msg.subject == 'PUBLISHER_READY':
+            publishers_ready += 1
 
     print('Waiting for subscriber processes...')
     subscribers = []
@@ -167,7 +162,7 @@ if __name__ == '__main__':
         subscribers[n].start()
 
     print("Starting Test...")
-    print(f"RTMA packet size: {pyrtma.constants['HEADER_SIZE'] + args.msg_size}")
+    print(f"Packet size: {args.msg_size}")
     print(f'Sending {args.num_msgs} messages...')
 
     # Wait for subscribers to finish
@@ -177,16 +172,16 @@ if __name__ == '__main__':
     subscribers_done = 0
     publishers_done = 0
     while (subscribers_done < args.num_subscribers) and (publishers_done < args.num_publishers):
-        msg = mod.read_message(timeout=0.100)
-        if msg is not None:
-            if msg.msg_name == 'SUBSCRIBER_DONE':
-                subscriber_done += 1
-            elif msg.msg_name == 'PUBLISHER_DONE':
-                publishers_done += 1
+        client.wait(count=1)
+        msg = reply_msg.pop()
+        if msg.subject == 'SUBSCRIBER_DONE':
+            subscriber_done += 1
+        elif msg.subject == 'PUBLISHER_DONE':
+            publishers_done += 1
 
         if (time.perf_counter() - abort_start) > abort_timeout: 
             time.sleep(1)
-            mod.send_signal('EXIT')
+            client.publish('EXIT')
             print('Test Timeout! Sending Exit Signal...')
             break
 

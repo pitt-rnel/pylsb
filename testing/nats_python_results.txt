@@ -1,0 +1,103 @@
+nats-python bench tests:
+
+"1 Producer, No Consumers:"
+
+Packet size: 100
+Sending 10000 messages...
+Publisher[1] -> 10000 messages | 40034 messages/sec | 4.4 MB/sec | 0.249786 sec 
+
+Packet size: 1000
+Sending 10000 messages...
+Publisher[1] -> 10000 messages | 37778 messages/sec | 38.2 MB/sec | 0.264698 sec 
+
+Packet size: 1000000
+Sending 10000 messages...
+Publisher[1] -> 10000 messages | 1018 messages/sec | 1018.9 MB/sec | 9.814781 sec 
+
+"1 Producer, 1 Consumers:"
+
+Packet size: 100
+Sending 10000 messages...
+Publisher[1] -> 10000 messages | 61993 messages/sec | 6.9 MB/sec | 0.161307 sec 
+Subscriber [1] -> 10000 messages | 62033 messages/sec | 7.2 MB/sec | 0.161187 sec 
+
+Packet size: 1000
+Sending 10000 messages...
+Publisher[1] -> 10000 messages | 60142 messages/sec | 60.8 MB/sec | 0.166273 sec 
+Subscriber [1] -> 10000 messages | 60171 messages/sec | 61.1 MB/sec | 0.166174 sec 
+
+Packet size: 1000000
+Sending 10000 messages...
+Publisher[1] -> 10000 messages | 144 messages/sec | 144.2 MB/sec | 69.339563 sec 
+Subscriber [1] -> 10000 messages | 143 messages/sec | 143.9 MB/sec | 69.473117 sec 
+
+"1 Producer, 5 Consumers:"
+
+Packet size: 100
+Sending 10000 messages...
+Subscriber [1] -> 10000 messages | 25913 messages/sec | 3.0 MB/sec | 0.385855 sec 
+Subscriber [2] -> 10000 messages | 25907 messages/sec | 3.0 MB/sec | 0.385954 sec 
+Subscriber [3] -> 10000 messages | 25908 messages/sec | 3.0 MB/sec | 0.385930 sec 
+Subscriber [5] -> 10000 messages | 25906 messages/sec | 3.0 MB/sec | 0.385958 sec 
+Publisher[1] -> 10000 messages | 25911 messages/sec | 2.9 MB/sec | 0.385922 sec 
+Subscriber [4] -> 10000 messages | 24254 messages/sec | 2.8 MB/sec | 0.412262 sec 
+
+Packet size: 1000
+Sending 10000 messages...
+Subscriber [4] -> 10000 messages | 22587 messages/sec | 23.0 MB/sec | 0.442672 sec 
+Subscriber [5] -> 10000 messages | 22585 messages/sec | 22.9 MB/sec | 0.442722 sec 
+Subscriber [2] -> 10000 messages | 22585 messages/sec | 22.9 MB/sec | 0.442725 sec 
+Subscriber [1] -> 10000 messages | 22591 messages/sec | 23.0 MB/sec | 0.442608 sec 
+Subscriber [3] -> 10000 messages | 22400 messages/sec | 22.8 MB/sec | 0.446371 sec 
+Publisher[1] -> 10000 messages | 22585 messages/sec | 22.8 MB/sec | 0.442764 sec 
+
+Packet size: 1000000
+Sending 10000 messages...
+Publisher[1] -> 10000 messages | 84 messages/sec | 84.1 MB/sec | 118.843498 sec 
+Subscriber [3] -> 10000 messages | 84 messages/sec | 84.0 MB/sec | 119.007192 sec 
+Subscriber [2] -> 10000 messages | 84 messages/sec | 84.0 MB/sec | 119.009026 sec 
+Subscriber [1] -> 10000 messages | 84 messages/sec | 84.0 MB/sec | 119.002307 sec 
+Subscriber [5] -> 10000 messages | 84 messages/sec | 84.0 MB/sec | 119.017619 sec 
+Subscriber [4] -> 10000 messages | 83 messages/sec | 83.6 MB/sec | 119.601965 sec 
+
+"5 Producer, 5 Consumers:"
+
+Packet size: 100
+Sending 10000 messages...
+Publisher[3] -> 2000 messages | 71016 messages/sec | 7.9 MB/sec | 0.028162 sec 
+Publisher[5] -> 2000 messages | 70440 messages/sec | 7.8 MB/sec | 0.028393 sec 
+Publisher[1] -> 2000 messages | 70994 messages/sec | 7.9 MB/sec | 0.028171 sec 
+Publisher[4] -> 2000 messages | 23565 messages/sec | 2.6 MB/sec | 0.084871 sec 
+Publisher[2] -> 2000 messages | 54536 messages/sec | 6.1 MB/sec | 0.036672 sec 
+Subscriber [4] -> 10000 messages | 42724 messages/sec | 5.0 MB/sec | 0.234035 sec 
+Subscriber [5] -> 10000 messages | 42614 messages/sec | 4.9 MB/sec | 0.234637 sec 
+Subscriber [2] -> 10000 messages | 38450 messages/sec | 4.5 MB/sec | 0.260049 sec 
+Subscriber [1] -> 10000 messages | 34958 messages/sec | 4.1 MB/sec | 0.286028 sec 
+Subscriber [3] -> 10000 messages | 34824 messages/sec | 4.0 MB/sec | 0.287125 sec 
+
+Packet size: 1000
+Sending 10000 messages...
+Publisher[4] -> 2000 messages | 60489 messages/sec | 61.2 MB/sec | 0.033064 sec 
+Publisher[3] -> 2000 messages | 58898 messages/sec | 59.5 MB/sec | 0.033957 sec 
+Publisher[1] -> 2000 messages | 46759 messages/sec | 47.3 MB/sec | 0.042772 sec 
+Publisher[2] -> 2000 messages | 25092 messages/sec | 25.4 MB/sec | 0.079704 sec 
+Publisher[5] -> 2000 messages | 51183 messages/sec | 51.7 MB/sec | 0.039075 sec 
+Subscriber [3] -> 10000 messages | 28364 messages/sec | 28.8 MB/sec | 0.352515 sec 
+Subscriber [4] -> 10000 messages | 28414 messages/sec | 28.9 MB/sec | 0.351898 sec 
+Subscriber [5] -> 10000 messages | 27148 messages/sec | 27.6 MB/sec | 0.368309 sec 
+Subscriber [1] -> 10000 messages | 26913 messages/sec | 27.3 MB/sec | 0.371521 sec 
+Subscriber [2] -> 10000 messages | 25638 messages/sec | 26.1 MB/sec | 0.390000 sec 
+
+Packet size: 1000000
+Sending 10000 messages...
+Publisher[4] -> 2000 messages | 18 messages/sec | 18.7 MB/sec | 106.828667 sec 
+Publisher[2] -> 2000 messages | 18 messages/sec | 18.1 MB/sec | 110.752353 sec 
+Publisher[3] -> 2000 messages | 18 messages/sec | 18.0 MB/sec | 111.081721 sec 
+Publisher[5] -> 2000 messages | 17 messages/sec | 17.9 MB/sec | 111.745328 sec 
+Publisher[1] -> 2000 messages | 17 messages/sec | 17.8 MB/sec | 112.138693 sec 
+Subscriber [4] -> 10000 messages | 88 messages/sec | 88.9 MB/sec | 112.476192 sec 
+Subscriber [3] -> 10000 messages | 88 messages/sec | 88.9 MB/sec | 112.476630 sec 
+Subscriber [1] -> 10000 messages | 88 messages/sec | 88.9 MB/sec | 112.458321 sec 
+Subscriber [2] -> 10000 messages | 88 messages/sec | 88.9 MB/sec | 112.519378 sec 
+Subscriber [5] -> 10000 messages | 88 messages/sec | 88.7 MB/sec | 112.777904 sec 
+

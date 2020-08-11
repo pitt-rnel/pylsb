@@ -33,10 +33,12 @@ def publisher_loop(pub_id=0, num_msgs=100000, msg_size=128, num_subscribers=0, s
     if msg_size > 0:
         msg.data[:] = list(range(msg_size))
 
+    payload=bytes(msg)
+
     # Send loop
     tic = time.perf_counter()
     for n in range(num_msgs):
-        client.publish('TEST', payload=bytes(msg))
+        client.publish('TEST', payload=payload)
     toc = time.perf_counter()
 
     client.publish('PUBLISHER_DONE')
@@ -46,8 +48,8 @@ def publisher_loop(pub_id=0, num_msgs=100000, msg_size=128, num_subscribers=0, s
 
     # Stats
     dur = toc - tic
-    data_rate =  total_msg_size * num_msgs / float(1048576) / dur
-    print(f"Publisher[{pub_id}] -> {num_msgs} messages | {int(num_msgs/dur)} messages/sec | {data_rate:0.1f} MB/sec | {dur:0.6f} sec ")
+    data_rate =  total_msg_size * num_msgs / 1e6 / dur
+    print(f"Publisher [{pub_id}] -> {num_msgs} messages | {int(num_msgs/dur)} messages/sec | {data_rate:0.1f} MB/sec | {dur:0.6f} sec ")
 
 
 def subscriber_loop(sub_id=0, num_msgs=100000, msg_size=128, server='nats://127.0.0.1:4222'):
@@ -85,7 +87,7 @@ def subscriber_loop(sub_id=0, num_msgs=100000, msg_size=128, server='nats://127.
     total_msg_size = len(additional_bytes) + test_msg_size
 
     dur = toc - tic
-    data_rate = (total_msg_size * num_msgs) / float(1048576) / dur
+    data_rate = (total_msg_size * num_msgs) / 1e6 / dur
     if msg_count == num_msgs:
         print(f"Subscriber [{sub_id:d}] -> {msg_count} messages | {int((msg_count-1)/dur)} messages/sec | {data_rate:0.1f} MB/sec | {dur:0.6f} sec ")
     else:
@@ -124,7 +126,11 @@ if __name__ == '__main__':
     client.subscribe('SUBSCRIBER_READY', callback=callback)
     client.subscribe('SUBSCRIBER_DONE', callback=callback)
 
-    print("Initializing publisher processses...")
+    sys.stdout.write(f"Packet size: {args.msg_size} bytes\n")
+    sys.stdout.write(f'Sending {args.num_msgs} messages...\n')
+    sys.stdout.flush()
+
+    # print("Initializing publisher processses...")
     publishers = []
     for n in range(args.num_publishers):
         publishers.append(
@@ -147,7 +153,7 @@ if __name__ == '__main__':
         if msg.subject == 'PUBLISHER_READY':
             publishers_ready += 1
 
-    print('Waiting for subscriber processes...')
+    # print('Waiting for subscriber processes...')
     subscribers = []
     for n in range(args.num_subscribers):
         subscribers.append(
@@ -161,26 +167,23 @@ if __name__ == '__main__':
                     )
         subscribers[n].start()
 
-    print("Starting Test...")
-    print(f"Packet size: {args.msg_size}")
-    print(f'Sending {args.num_msgs} messages...')
+    # print("Starting Test...")
 
     # Wait for subscribers to finish
-    abort_timeout = max(args.num_msgs/1000, 10) #seconds
+    abort_timeout = 120
     abort_start = time.perf_counter()
 
     subscribers_done = 0
     publishers_done = 0
-    while (subscribers_done < args.num_subscribers) and (publishers_done < args.num_publishers):
+    while (subscribers_done < args.num_subscribers) or (publishers_done < args.num_publishers):
         client.wait(count=1)
         msg = reply_msg.pop()
         if msg.subject == 'SUBSCRIBER_DONE':
-            subscriber_done += 1
+            subscribers_done += 1
         elif msg.subject == 'PUBLISHER_DONE':
             publishers_done += 1
 
         if (time.perf_counter() - abort_start) > abort_timeout: 
-            time.sleep(1)
             client.publish('EXIT')
             print('Test Timeout! Sending Exit Signal...')
             break
@@ -191,4 +194,4 @@ if __name__ == '__main__':
     for subscriber in subscribers:
         subscriber.join()
     
-    print('Done!')
+    # print('Done!')

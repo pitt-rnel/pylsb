@@ -1,5 +1,6 @@
 import ctypes
 import sys
+from typing import ClassVar
 
 MODULE_ID = ctypes.c_short
 HOST_ID = ctypes.c_short
@@ -96,20 +97,11 @@ constants["HEADER_SIZE"] = ctypes.sizeof(RTMA_MSG_HEADER)
 
 class RTMA_MESSAGE(ctypes.Structure):
     _fields_ = [
-        ("msg_type", ctypes.c_int),
-        ("msg_count", MSG_COUNT),
-        ("send_time", ctypes.c_double),
-        ("recv_time", ctypes.c_double),
-        ("src_host_id", HOST_ID),
-        ("src_mod_id", MODULE_ID),
-        ("dest_host_id", HOST_ID),
-        ("dest_mod_id", MODULE_ID),
-        ("num_data_bytes", ctypes.c_int),
-        ("remaining_bytes", ctypes.c_int),
-        ("is_dynamic", ctypes.c_int),
-        ("reserved", ctypes.c_int),
-        ("data", ctypes.c_char * constants["MAX_CONTIGUOUS_MESSAGE_DATA"]),
+        ("header", RTMA_MSG_HEADER),
+        ("data", ctypes.c_byte * constants["MAX_CONTIGUOUS_MESSAGE_DATA"]),
     ]
+
+    header_size: ClassVar[int] = ctypes.sizeof(RTMA_MSG_HEADER)
 
 
 class CONNECT(ctypes.Structure):
@@ -177,4 +169,3 @@ def AddMessage(msg_name, msg_type, msg_def=None, signal=False):
 
 def AddSignal(msg_name, msg_type):
     AddMessage(msg_name, msg_type, msg_def=None, signal=True)
-

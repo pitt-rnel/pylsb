@@ -266,7 +266,7 @@ class MessageManager:
                     src = self.modules[client_socket]
                     self.process_message(src, msg, wlist)
             except KeyboardInterrupt:
-                self.logger.info("Stopping Message Mangger")
+                self.logger.info("Stopping Message Manager")
                 break
             finally:
                 for mod in self.modules:

@@ -151,13 +151,15 @@ class MessageManager:
         self.remove_module(src_module)
 
     def add_subscription(self, src_module: Module, msg: Message):
-        msg_type_id = pyrtma.types.Subscribe.from_buffer(msg.data).value
-        self.subscriptions[msg_type_id].add(src_module)
+        sub = pyrtma.types.Subscribe.from_buffer(msg.data)
+        self.subscriptions[sub.msg_type].add(src_module)
+        self.logger.info(f"SUBSCRIBE- {src_module!s} to MID:{sub.msg_type}")
 
     def remove_subscription(self, src_module: Module, msg: Message):
-        msg_type_id = pyrtma.types.Unsubscribe.from_buffer(msg.data).value
+        sub = pyrtma.types.Unsubscribe.from_buffer(msg.data)
         # Silently let modules unsubscribe from messages that they are not subscribed to.
-        self.subscriptions[msg_type_id].discard(src_module)
+        self.subscriptions[sub.msg_type].discard(src_module)
+        self.logger.info(f"UNSUBSCRIBE- {src_module!s} to MID:{sub.msg_type}")
 
     def resume_subscription(self, src_module: Module, msg: Message):
         self.add_subscription(src_module, msg)
@@ -242,16 +244,12 @@ class MessageManager:
             self.logger.info(f"DISCONNECT - {src_module!s}")
         elif msg_name == "Subscribe":
             self.add_subscription(src_module, msg)
-            self.logger.info(f"SUBSCRIBE- {src_module!s} to {msg.msg_name}")
         elif msg_name == "Unsubscribe":
             self.remove_subscription(src_module, msg)
-            self.logger.info(f"UNSUBSCRIBE - {src_module!s} from {msg.msg_name}")
         elif msg_name == "PauseSubscription":
-            self.logger.info(f"PAUSE_SUBSCRIPTION - {src_module!s} to {msg.msg_name}")
             self.pause_subscription(src_module, msg)
         elif msg_name == "ResumeSubscription":
             self.resume_subscription(src_module, msg)
-            self.logger.info(f"RESUME_SUBSCRIPTION - {src_module!s} to {msg.msg_name}")
         else:
             self.logger.info(f"FORWARD - {msg_name} from {src_module!s}")
             self.forward_message(msg, wlist)

@@ -2,9 +2,11 @@ import socket
 import select
 import time
 import os
-
-import pyrtma.core as rtma
-from pyrtma.message import Message
+import ctypes
+from typing import List
+import pyrtma.types
+from pyrtma.types import MessageHeader, Message
+from pyrtma.constants import *
 
 DEBUG = False
 
@@ -16,13 +18,12 @@ def debug_print(msg):
         pass
 
 
-class rtmaClient(object):
-    def __init__(self, module_id=0, host_id=0):
+class Client(object):
+    def __init__(self, module_id: int = 0, host_id: int = 0):
         self.module_id = module_id
         self.host_id = host_id
         self.msg_count = 0
-        self.self_msg_count = 0
-        self.start_time = time.perf_counter()
+        self.start_time = time.time()
         self.server = None
         self.connected = False
 
@@ -31,7 +32,10 @@ class rtmaClient(object):
             self.disconnect()
 
     def connect(
-        self, server_name="localhost:7111", logger_status=False, daemon_status=False
+        self,
+        server_name: str = "localhost:7111",
+        logger_status: bool = False,
+        daemon_status: bool = False,
     ):
 
         self.server = server_name.split(":")
@@ -50,84 +54,99 @@ class rtmaClient(object):
 
             # Connect to the message server
             self.sock.connect(self.server)
-            self.start_time = time.perf_counter()
+            self.start_time = time.time()
 
             # Disable Nagle Algorithm
             self.sock.setsockopt(socket.getprotobyname("tcp"), socket.TCP_NODELAY, 1)
 
             self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
-            msg = Message(msg_name="CONNECT")
-            msg.data.logger_status = int(logger_status)
-            msg.data.daemon_status = int(daemon_status)
+            msg = pyrtma.types.Connect()
+            msg.logger_status = int(logger_status)
+            msg.daemon_status = int(daemon_status)
 
             self.send_message(msg)
             ack_msg = self.wait_for_acknowledgement()
-            if ack_msg == None:
+            if ack_msg is None:
                 raise Exception("Failed to receive Acknowlegement from MessageManager")
 
             # save own module ID from ACK if asked to be assigned dynamic ID
             if self.module_id == 0:
-                self.module_id = ack_msg.rtma_header.dest_mod_id
+                self.module_id = ack_msg.header.dest_mod_id
 
             self.connected = True
 
     def disconnect(self):
-        self.send_signal("DISCONNECT")
+        self.send_signal("Disconnect")
         self.sock.close()
         self.connected = False
 
     def send_module_ready(self):
-        msg = Message(msg_name="MODULE_READY")
+        msg = pyrtma.types.ModuleReady()
         msg.data.pid = os.getpid()
         self.send_message(msg)
 
-    def _subscription_control(self, msg_list, ctrl_msg):
+    def _subscription_control(self, msg_list: List[str], ctrl_msg: str):
         if not isinstance(msg_list, list):
             msg_list = [msg_list]
 
+        if ctrl_msg == "Subscribe":
+            msg = pyrtma.types.Subscribe()
+        elif ctrl_msg == "Unsubscribe":
+            msg = pyrtma.types.Subscribe()
+        elif ctrl_msg == "PauseSubscription":
+            msg = pyrtma.types.PauseSubscription()
+        elif ctrl_msg == "ResumeSubscription":
+            msg = pyrtma.types.ResumeSubscription()
+        else:
+            raise TypeError("Unknown control message type.")
+
         for msg_name in msg_list:
-            msg = Message(ctrl_msg)
-            msg.data.value = rtma.MT[msg_name]
+            msg.msg_type = pyrtma.types.MT[msg_name]
             self.send_message(msg)
-            self.wait_for_acknowledgement()
 
-    def subscribe(self, msg_list):
-        self._subscription_control(msg_list, "SUBSCRIBE")
+    def subscribe(self, msg_list: List[str]):
+        self._subscription_control(msg_list, "Subscribe")
 
-    def unsubscribe(self, msg_list):
-        self._subscription_control(msg_list, "UNSUBSCRIBE")
+    def unsubscribe(self, msg_list: List[str]):
+        self._subscription_control(msg_list, "Unsubscribe")
 
-    def pause_subscription(self):
-        self._subscription_control(msg_list, "PAUSE_SUBSCRIPTION")
+    def pause_subscription(self, msg_list: List[str]):
+        self._subscription_control(msg_list, "PauseSubscription")
 
-    def resume_subscription(self):
-        self._subscription_control(msg_list, "RESUME_SUBSCRIPTION")
+    def resume_subscription(self, msg_list: List[str]):
+        self._subscription_control(msg_list, "ResumeSubscription")
 
-    def send_signal(self, signal_name, dest_mod_id=0, dest_host_id=0, timeout=-1):
-        signal = Message(msg_name=signal_name, signal=True)
-        self.send_message(signal, dest_mod_id, dest_host_id, timeout)
+    def send_signal(
+        self,
+        signal_name: str,
+        dest_mod_id: int = 0,
+        dest_host_id: int = 0,
+        timeout: float = -1,
+    ):
 
-    def send_message(self, msg, dest_mod_id=0, dest_host_id=0, timeout=-1):
         # Verify that the module & host ids are valid
-        if dest_mod_id < 0 or dest_mod_id > rtma.constants["MAX_MODULES"]:
+        if dest_mod_id < 0 or dest_mod_id > MAX_MODULES:
             raise Exception(
                 f"rtmaClient::send_message: Got invalid dest_mod_id [{dest_mod_id}]"
             )
 
-        if dest_host_id < 0 or dest_host_id > rtma.constants["MAX_HOSTS"]:
+        if dest_host_id < 0 or dest_host_id > MAX_HOSTS:
             raise Exception(
                 f"rtmaClient::send_message: Got invalid dest_host_id [{dest_host_id}]"
             )
 
         # Assume that msg_type, num_data_bytes, data - have been filled in
-        msg.rtma_header.msg_count = self.msg_count
-        msg.rtma_header.send_time = time.perf_counter()
-        msg.rtma_header.recv_time = 0.0
-        msg.rtma_header.src_host_id = self.host_id
-        msg.rtma_header.src_mod_id = self.module_id
-        msg.rtma_header.dest_host_id = dest_host_id
-        msg.rtma_header.dest_mod_id = dest_mod_id
+        header = MessageHeader()
+        header.msg_type = pyrtma.types.MT[signal_name]
+        header.msg_count = self.msg_count
+        header.send_time = time.time()
+        header.recv_time = 0.0
+        header.src_host_id = self.host_id
+        header.src_mod_id = self.module_id
+        header.dest_host_id = dest_host_id
+        header.dest_mod_id = dest_mod_id
+        header.num_data_bytes = 0
 
         if timeout >= 0:
             readfds, writefds, exceptfds = select.select([], [self.sock], [], timeout)
@@ -137,10 +156,56 @@ class rtmaClient(object):
             )  # blocking
 
         if writefds:
-            if msg.rtma_header.num_data_bytes > 0:
-                self.sock.sendall(bytes(msg.rtma_header) + bytes(msg.data))
-            else:
-                self.sock.sendall(msg.rtma_header)
+            self.sock.sendall(header)
+
+            # debug_print(f"Sent {msg.msg_name}")
+            self.msg_count += 1
+
+        else:
+            # Socket was not ready to receive data. Drop the packet.
+            print("x", end="")
+
+    def send_message(
+        self,
+        msg_data: ctypes.Structure,
+        dest_mod_id: int = 0,
+        dest_host_id: int = 0,
+        timeout: float = -1,
+    ):
+        # Verify that the module & host ids are valid
+        if dest_mod_id < 0 or dest_mod_id > MAX_MODULES:
+            raise Exception(
+                f"rtmaClient::send_message: Got invalid dest_mod_id [{dest_mod_id}]"
+            )
+
+        if dest_host_id < 0 or dest_host_id > MAX_HOSTS:
+            raise Exception(
+                f"rtmaClient::send_message: Got invalid dest_host_id [{dest_host_id}]"
+            )
+
+        # Assume that msg_type, num_data_bytes, data - have been filled in
+        header = MessageHeader()
+        header.msg_type = pyrtma.types.MT[msg_data.__class__.__name__]
+        header.msg_count = self.msg_count
+        header.send_time = time.time()
+        header.recv_time = 0.0
+        header.src_host_id = self.host_id
+        header.src_mod_id = self.module_id
+        header.dest_host_id = dest_host_id
+        header.dest_mod_id = dest_mod_id
+        header.num_data_bytes = ctypes.sizeof(msg_data)
+
+        if timeout >= 0:
+            readfds, writefds, exceptfds = select.select([], [self.sock], [], timeout)
+        else:
+            readfds, writefds, exceptfds = select.select(
+                [], [self.sock], []
+            )  # blocking
+
+        if writefds:
+            self.sock.sendall(header)
+            if header.num_data_bytes > 0:
+                self.sock.sendall(msg_data)
 
             # debug_print(f"Sent {msg.msg_name}")
             self.msg_count += 1
@@ -160,31 +225,26 @@ class rtmaClient(object):
         # Read RTMA Header Section
         if readfds:
             msg = Message()
-            msg.rtma_header = rtma.RTMA_MSG_HEADER()
-
-            view = memoryview(msg.rtma_header).cast("b")
-            nbytes = self.sock.recv_into(
-                view, rtma.constants["HEADER_SIZE"], socket.MSG_WAITALL
-            )
-            msg.rtma_header.recv_time = time.perf_counter()
-            msg.msg_name = rtma.MT_BY_ID[msg.rtma_header.msg_type]
-            msg.msg_size = (
-                rtma.constants["HEADER_SIZE"] + msg.rtma_header.num_data_bytes
-            )
+            view = memoryview(msg.header).cast("b")
+            nbytes = self.sock.recv_into(view, msg.header_size, socket.MSG_WAITALL)
+            assert (
+                nbytes == msg.header_size
+            ), "Did not send all the header to message manager."
+            msg.header.recv_time = time.time()
+            msg.msg_name = pyrtma.types.MT_BY_ID[msg.header.msg_type]
+            msg.msg_size = msg.header_size + msg.header.num_data_bytes
         else:
             return None
 
         # Read Data Section
-        if msg.rtma_header.num_data_bytes > 0:
-            msg.data = getattr(rtma, msg.msg_name)()
-            view = memoryview(msg.data).cast("b")
+        if msg.header.num_data_bytes > 0:
             nbytes = self.sock.recv_into(
-                view, msg.rtma_header.num_data_bytes, socket.MSG_WAITALL
+                msg.data, msg.header.num_data_bytes, socket.MSG_WAITALL
             )
 
         return msg
 
-    def wait_for_acknowledgement(self, timeout=3):
+    def wait_for_acknowledgement(self, timeout: float = 3):
         ret = 0
         debug_print("Waiting for ACK... ")
 
@@ -193,7 +253,7 @@ class rtmaClient(object):
             while True:
                 msg = self.read_message(ack=True)
                 if msg is not None:
-                    if msg.rtma_header.msg_type == rtma.MT["ACKNOWLEDGE"]:
+                    if msg.header.msg_type == pyrtma.types.MT["Acknowledge"]:
                         break
                         debug_print("Got ACK!")
             return msg
@@ -204,7 +264,7 @@ class rtmaClient(object):
             while time_remaining > 0:
                 msg = self.read_message(timeout=time_remaining, ack=True)
                 if msg is not None:
-                    if msg.rtma_header.msg_type == rtma.MT["ACKNOWLEDGE"]:
+                    if msg.header.msg_type == pyrtma.types.MT["Acknowledge"]:
                         debug_print("Got ACK!")
                         return msg
 

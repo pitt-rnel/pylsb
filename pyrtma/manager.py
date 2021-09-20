@@ -257,9 +257,7 @@ class MessageManager:
     def run(self):
         try:
             while True:
-                rlist, wlist, xlist = select.select(
-                    self.modules.keys(), self.modules.keys(), [], self.timeout
-                )
+                rlist, _, _ = select.select(self.modules.keys(), [], [], self.timeout)
 
                 # Check for an incoming connection request
                 if len(rlist) > 0:
@@ -277,7 +275,12 @@ class MessageManager:
                     # Randomly select the order of sockets with data.
                     random.shuffle(rlist)
 
-                    # Read the incoming messages, process, and distribute
+                    # Check whichs clients are ready to receive data
+                    if rlist:
+                        _, wlist, _ = select.select(
+                            [], self.modules.keys(), [], self.timeout
+                        )
+
                     for client_socket in rlist:
                         msg = self.read_message(client_socket)
                         src = self.modules[client_socket]

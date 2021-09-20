@@ -225,11 +225,10 @@ class MessageManager:
 
         # Send to all subscribed modules
         for module in subscribers:
-            if module.id == msg.header.dest_mod_id:
-                if module.conn in wlist:
-                    module.send_message(msg)
-                else:
-                    print("x", end="")
+            if module.conn in wlist:
+                module.send_message(msg)
+            else:
+                print("x", end="")
 
     def process_message(
         self, src_module: Module, msg: Message, wlist: List[socket.socket]

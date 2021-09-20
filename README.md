@@ -9,9 +9,9 @@ $ pip install .
 ## Usage
 Create a module:
 ```python
-import pyrtma
+from pyrtma.client import Client
 
-mod = pyrtma.rtmaClient()
+mod = Client()
 mod.Connect('127.0.0.1:7111')
 ```
 

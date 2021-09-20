@@ -294,6 +294,10 @@ class MessageManager:
 
 if __name__ == "__main__":
 
-    msg_mgr = MessageManager("127.0.0.1", 7111, debug=True)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-d", "--debug", action="store_true", help="Debug mode")
+    args = parser.parse_args()
+
+    msg_mgr = MessageManager("127.0.0.1", 7111, debug=args.debug)
 
     msg_mgr.run()

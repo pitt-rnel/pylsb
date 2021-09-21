@@ -67,7 +67,7 @@ class Message(ctypes.Structure):
         if timecode:
             return TimeCodeMessage
         else:
-            return Message
+            return DefaultMessage
 
     def cast_data(self):
         # Get the message data type

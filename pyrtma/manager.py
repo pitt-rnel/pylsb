@@ -7,11 +7,11 @@ import logging
 import time
 import random
 import ctypes
-from typing import Dict, List, Tuple, Set
+from typing import Dict, List, Tuple, Set, Type
 
 import pyrtma.types
 import pyrtma.constants
-from pyrtma.types import Message, MessageHeader
+from pyrtma.types import Message
 
 
 @dataclass
@@ -19,19 +19,20 @@ class Module:
 
     conn: socket.socket
     address: Tuple[str, int]
+    msg_type: Type[Message]
     id: int = 0
     pid: int = 0
     connected: bool = False
     is_logger: bool = False
 
     def send_message(self, msg: Message):
-        msg_size = Message.header_size + msg.header.num_data_bytes
+        msg_size = self.msg_type.header_size + msg.header.num_data_bytes
         payload = memoryview(msg).cast("b")[:msg_size]
         self.conn.sendall(payload)
 
     def send_ack(self):
         # Just send a header
-        header = MessageHeader()
+        header = self.msg_type.header_type()
         header.msg_type = pyrtma.types.MT["Acknowledge"]
         header.send_time = time.time()
         header.src_mod_id = pyrtma.constants.MID_MESSAGE_MANAGER
@@ -51,10 +52,13 @@ class Module:
 
 
 class MessageManager:
-    def __init__(self, ip_address: str, port: int, debug=False):
+    def __init__(
+        self, ip_address: str, port: int, msg_type: Type[Message], debug=False
+    ):
 
         self.ip_address = ip_address
         self.port = port
+        self.msg_type = msg_type
         self.timeout = 0.200
         self._debug = debug
         self.logger = logging.getLogger(f"MessageManager@{ip_address}:{port}")
@@ -81,6 +85,7 @@ class MessageManager:
         mm_module = Module(
             conn=self.listen_socket,
             address=(ip_address, port),
+            msg_type=self.msg_type,
             id=0,
             connected=True,
             is_logger=False,
@@ -88,8 +93,8 @@ class MessageManager:
 
         self.modules[self.listen_socket] = mm_module
 
-        self.header_size = ctypes.sizeof(MessageHeader)
-        self.recv_buffer = bytearray(ctypes.sizeof(Message))
+        self.header_size = self.msg_type.header_size
+        self.recv_buffer = bytearray(ctypes.sizeof(self.msg_type))
         self.data_view = memoryview(self.recv_buffer[self.header_size :])
 
         # Address Reuse allowed for testing
@@ -170,7 +175,7 @@ class MessageManager:
     def read_message(self, sock: socket.socket) -> Message:
         # Read RTMA Header Section
         nbytes = sock.recv_into(self.recv_buffer, self.header_size, socket.MSG_WAITALL)
-        msg = Message.from_buffer(self.recv_buffer)
+        msg = self.msg_type.from_buffer(self.recv_buffer)
 
         # Read Data Section
         if msg.header.num_data_bytes > 0:
@@ -181,7 +186,7 @@ class MessageManager:
         return msg
 
     def forward_message(self, msg: Message, wlist: List[socket.socket]):
-        """ Forward a message from other modules
+        """Forward a message from other modules
         The given message will be forwarded to:
             - all subscribed logger modules (ALWAYS)
             - if the message has a destination address, and it is subscribed to by that destination it will be forwarded only there
@@ -267,7 +272,7 @@ class MessageManager:
                             f"New connection accpeted from {address[0]}:{address[1]}"
                         )
                         self.sockets.append(conn)
-                        self.modules[conn] = Module(conn, address)
+                        self.modules[conn] = Module(conn, address, self.msg_type)
                     except ValueError:
                         pass
 
@@ -295,8 +300,13 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--debug", action="store_true", help="Debug mode")
+    parser.add_argument(
+        "-t", "--timecode", action="store_true", help="Use timecode in message header"
+    )
     args = parser.parse_args()
 
-    msg_mgr = MessageManager("127.0.0.1", 7111, debug=args.debug)
+    msg_type = Message.get_type(args.timecode)
+
+    msg_mgr = MessageManager("127.0.0.1", 7111, msg_type, debug=args.debug)
 
     msg_mgr.run()

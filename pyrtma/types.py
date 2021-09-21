@@ -1,6 +1,6 @@
 import ctypes
 import sys
-from typing import ClassVar
+from typing import ClassVar, Type
 from .constants import *
 
 module = sys.modules["pyrtma.types"]
@@ -52,7 +52,30 @@ class MessageHeader(ctypes.Structure):
     ]
 
 
+class TimeCodeMessageHeader(MessageHeader):
+    _fields_ = [
+        ("utc_seconds", ctypes.c_uint),
+        ("utc_fraction", ctypes.c_uint),
+    ]
+
+
 class Message(ctypes.Structure):
+    """Subclasses of Message must implement _fields_, header_size, and header_type"""
+
+    @staticmethod
+    def get_type(timecode: bool) -> Type["Message"]:
+        if timecode:
+            return TimeCodeMessage
+        else:
+            return Message
+
+    def cast_data(self):
+        # Get the message data type
+        msg_name = MT_BY_ID[self.header.msg_type]
+        return getattr(module, msg_name).from_buffer(self.data)
+
+
+class DefaultMessage(Message):
     _fields_ = [
         ("header", MessageHeader),
         ("data", ctypes.c_byte * MAX_CONTIGUOUS_MESSAGE_DATA),
@@ -60,10 +83,18 @@ class Message(ctypes.Structure):
 
     header_size: ClassVar[int] = ctypes.sizeof(MessageHeader)
 
-    def cast_data(self):
-        # Get the message data type
-        msg_name = MT_BY_ID[self.header.msg_type]
-        return getattr(module, msg_name).from_buffer(self.data)
+    header_type: ClassVar[Type[Message]] = MessageHeader
+
+
+class TimeCodeMessage(Message):
+    _fields_ = [
+        ("header", TimeCodeMessageHeader),
+        ("data", ctypes.c_byte * MAX_CONTIGUOUS_MESSAGE_DATA),
+    ]
+
+    header_size: ClassVar[int] = ctypes.sizeof(TimeCodeMessageHeader)
+
+    header_type: ClassVar[Type[Message]] = TimeCodeMessageHeader
 
 
 class Connect(ctypes.Structure):

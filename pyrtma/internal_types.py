@@ -3,7 +3,7 @@ import sys
 from typing import ClassVar, Type
 from .constants import *
 
-module = sys.modules["pyrtma.types"]
+module = sys.modules["pyrtma.internal_types"]
 
 # RTMA INTERNAL MESSAGE TYPES
 

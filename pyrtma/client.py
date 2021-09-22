@@ -4,8 +4,8 @@ import time
 import os
 import ctypes
 from typing import List
-import pyrtma.types
-from pyrtma.types import MessageHeader, Message
+import pyrtma.internal_types
+from pyrtma.internal_types import MessageHeader, Message
 from pyrtma.constants import *
 
 DEBUG = False
@@ -61,7 +61,7 @@ class Client(object):
 
             self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
-            msg = pyrtma.types.Connect()
+            msg = pyrtma.internal_types.Connect()
             msg.logger_status = int(logger_status)
             msg.daemon_status = int(daemon_status)
 
@@ -82,7 +82,7 @@ class Client(object):
         self.connected = False
 
     def send_module_ready(self):
-        msg = pyrtma.types.ModuleReady()
+        msg = pyrtma.internal_types.ModuleReady()
         msg.data.pid = os.getpid()
         self.send_message(msg)
 
@@ -91,18 +91,18 @@ class Client(object):
             msg_list = [msg_list]
 
         if ctrl_msg == "Subscribe":
-            msg = pyrtma.types.Subscribe()
+            msg = pyrtma.internal_types.Subscribe()
         elif ctrl_msg == "Unsubscribe":
-            msg = pyrtma.types.Subscribe()
+            msg = pyrtma.internal_types.Subscribe()
         elif ctrl_msg == "PauseSubscription":
-            msg = pyrtma.types.PauseSubscription()
+            msg = pyrtma.internal_types.PauseSubscription()
         elif ctrl_msg == "ResumeSubscription":
-            msg = pyrtma.types.ResumeSubscription()
+            msg = pyrtma.internal_types.ResumeSubscription()
         else:
             raise TypeError("Unknown control message type.")
 
         for msg_name in msg_list:
-            msg.msg_type = pyrtma.types.MT[msg_name]
+            msg.msg_type = pyrtma.internal_types.MT[msg_name]
             self.send_message(msg)
 
     def subscribe(self, msg_list: List[str]):
@@ -138,7 +138,7 @@ class Client(object):
 
         # Assume that msg_type, num_data_bytes, data - have been filled in
         header = MessageHeader()
-        header.msg_type = pyrtma.types.MT[signal_name]
+        header.msg_type = pyrtma.internal_types.MT[signal_name]
         header.msg_count = self.msg_count
         header.send_time = time.time()
         header.recv_time = 0.0
@@ -185,7 +185,7 @@ class Client(object):
 
         # Assume that msg_type, num_data_bytes, data - have been filled in
         header = MessageHeader()
-        header.msg_type = pyrtma.types.MT[msg_data.__class__.__name__]
+        header.msg_type = pyrtma.internal_types.MT[msg_data.__class__.__name__]
         header.msg_count = self.msg_count
         header.send_time = time.time()
         header.recv_time = 0.0
@@ -231,7 +231,7 @@ class Client(object):
                 nbytes == msg.header_size
             ), "Did not send all the header to message manager."
             msg.header.recv_time = time.time()
-            msg.msg_name = pyrtma.types.MT_BY_ID[msg.header.msg_type]
+            msg.msg_name = pyrtma.internal_types.MT_BY_ID[msg.header.msg_type]
             msg.msg_size = msg.header_size + msg.header.num_data_bytes
         else:
             return None
@@ -253,7 +253,7 @@ class Client(object):
             while True:
                 msg = self.read_message(ack=True)
                 if msg is not None:
-                    if msg.header.msg_type == pyrtma.types.MT["Acknowledge"]:
+                    if msg.header.msg_type == pyrtma.internal_types.MT["Acknowledge"]:
                         break
                         debug_print("Got ACK!")
             return msg
@@ -264,7 +264,7 @@ class Client(object):
             while time_remaining > 0:
                 msg = self.read_message(timeout=time_remaining, ack=True)
                 if msg is not None:
-                    if msg.header.msg_type == pyrtma.types.MT["Acknowledge"]:
+                    if msg.header.msg_type == pyrtma.internal_types.MT["Acknowledge"]:
                         debug_print("Got ACK!")
                         return msg
 

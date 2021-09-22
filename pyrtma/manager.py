@@ -9,9 +9,9 @@ import random
 import ctypes
 from typing import Dict, List, Tuple, Set, Type
 
-import pyrtma.types
+import pyrtma.internal_types
 import pyrtma.constants
-from pyrtma.types import Message
+from pyrtma.internal_types import Message
 
 
 @dataclass
@@ -33,7 +33,7 @@ class Module:
     def send_ack(self):
         # Just send a header
         header = self.msg_type.header_type()
-        header.msg_type = pyrtma.types.MT["Acknowledge"]
+        header.msg_type = pyrtma.internal_types.MT["Acknowledge"]
         header.send_time = time.time()
         header.src_mod_id = pyrtma.constants.MID_MESSAGE_MANAGER
         header.dest_mod_id = self.id
@@ -132,7 +132,7 @@ class MessageManager:
             src_module.id = self.assign_module_id()
 
         # Convert the data blob into the correct msg struct
-        connect_info = pyrtma.types.Connect.from_buffer(msg.data)
+        connect_info = pyrtma.internal_types.Connect.from_buffer(msg.data)
         src_module.is_logger = connect_info.logger_status == 1
         src_module.connected = True
         if src_module.is_logger:
@@ -156,12 +156,12 @@ class MessageManager:
         self.remove_module(src_module)
 
     def add_subscription(self, src_module: Module, msg: Message):
-        sub = pyrtma.types.Subscribe.from_buffer(msg.data)
+        sub = pyrtma.internal_types.Subscribe.from_buffer(msg.data)
         self.subscriptions[sub.msg_type].add(src_module)
         self.logger.info(f"SUBSCRIBE- {src_module!s} to MID:{sub.msg_type}")
 
     def remove_subscription(self, src_module: Module, msg: Message):
-        sub = pyrtma.types.Unsubscribe.from_buffer(msg.data)
+        sub = pyrtma.internal_types.Unsubscribe.from_buffer(msg.data)
         # Silently let modules unsubscribe from messages that they are not subscribed to.
         self.subscriptions[sub.msg_type].discard(src_module)
         self.logger.info(f"UNSUBSCRIBE- {src_module!s} to MID:{sub.msg_type}")
@@ -238,7 +238,7 @@ class MessageManager:
     def process_message(
         self, src_module: Module, msg: Message, wlist: List[socket.socket]
     ):
-        msg_name = pyrtma.types.MT_BY_ID.get(msg.header.msg_type)
+        msg_name = pyrtma.internal_types.MT_BY_ID.get(msg.header.msg_type)
 
         if msg_name == "Connect":
             self.connect_module(src_module, msg)

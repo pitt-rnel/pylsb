@@ -271,6 +271,12 @@ class MessageManager:
                         self.logger.info(
                             f"New connection accpeted from {address[0]}:{address[1]}"
                         )
+
+                        # Disable Nagle Algorithm
+                        conn.setsockopt(
+                            socket.getprotobyname("tcp"), socket.TCP_NODELAY, 1
+                        )
+
                         self.sockets.append(conn)
                         self.modules[conn] = Module(conn, address, self.msg_type)
                     except ValueError:

@@ -63,7 +63,8 @@ class MessageManager:
         self.ip_address = ip_address
         self.port = port
         self.msg_type = msg_type
-        self.timeout = 0.200
+        self.read_timeout = 0.200
+        self.write_timeout = 0  # c++ message manager uses timeout = 0 for all modules except logger modules, which uses -1 (blocking)
         self._debug = debug
         self.logger = logging.getLogger(f"MessageManager@{ip_address}:{port}")
 
@@ -270,7 +271,9 @@ class MessageManager:
     def run(self):
         try:
             while True:
-                rlist, _, _ = select.select(self.modules.keys(), [], [], self.timeout)
+                rlist, _, _ = select.select(
+                    self.modules.keys(), [], [], self.read_timeout
+                )
 
                 # Check for an incoming connection request
                 if len(rlist) > 0:
@@ -297,7 +300,7 @@ class MessageManager:
                     # Check whichs clients are ready to receive data
                     if rlist:
                         _, wlist, _ = select.select(
-                            [], self.modules.keys(), [], self.timeout
+                            [], self.modules.keys(), [], self.write_timeout
                         )
 
                     for client_socket in rlist:

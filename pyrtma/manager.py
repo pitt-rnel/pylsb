@@ -166,12 +166,14 @@ class MessageManager:
         sub = pyrtma.internal_types.Subscribe.from_buffer(msg.data)
         self.subscriptions[sub.msg_type].add(src_module)
         self.logger.info(f"SUBSCRIBE- {src_module!s} to MID:{sub.msg_type}")
+        src_module.send_ack()
 
     def remove_subscription(self, src_module: Module, msg: Message):
         sub = pyrtma.internal_types.Unsubscribe.from_buffer(msg.data)
         # Silently let modules unsubscribe from messages that they are not subscribed to.
         self.subscriptions[sub.msg_type].discard(src_module)
         self.logger.info(f"UNSUBSCRIBE- {src_module!s} to MID:{sub.msg_type}")
+        src_module.send_ack()
 
     def resume_subscription(self, src_module: Module, msg: Message):
         self.add_subscription(src_module, msg)

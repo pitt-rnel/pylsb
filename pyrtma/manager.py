@@ -276,7 +276,7 @@ class MessageManager:
                         rlist.remove(self.listen_socket)
                         (conn, address) = self.listen_socket.accept()
                         self.logger.info(
-                            f"New connection accpeted from {address[0]}:{address[1]}"
+                            f"New connection accepted from {address[0]}:{address[1]}"
                         )
 
                         # Disable Nagle Algorithm

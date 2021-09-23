@@ -7,11 +7,11 @@ import logging
 import time
 import random
 import ctypes
-from typing import Dict, List, Tuple, Set, Type
+from typing import Dict, List, Tuple, Set, Type, Union
 
 import pyrtma.internal_types
 import pyrtma.constants
-from pyrtma.internal_types import Message
+from pyrtma.internal_types import Message, DefaultMessage
 
 
 @dataclass
@@ -53,7 +53,11 @@ class Module:
 
 class MessageManager:
     def __init__(
-        self, ip_address: str, port: int, msg_type: Type[Message], debug=False
+        self,
+        ip_address: Union[str, int] = socket.INADDR_ANY,
+        port: int = 7111,
+        msg_type: Type[Message] = DefaultMessage,
+        debug=False,
     ):
 
         self.ip_address = ip_address
@@ -62,6 +66,9 @@ class MessageManager:
         self.timeout = 0.200
         self._debug = debug
         self.logger = logging.getLogger(f"MessageManager@{ip_address}:{port}")
+
+        if ip_address == socket.INADDR_ANY:
+            ip_address = ""  # bind and Module require a string input, '' is treated as INADDR_ANY by bind
 
         # Create the tcp listening socket
         self.listen_socket = socket.socket(
@@ -305,14 +312,31 @@ class MessageManager:
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "-a",
+        "--addr",
+        type=str,
+        default="",
+        help="Listener address. IP address/hostname as a string. Default is '' which is evaluated as socket.INADDR_ANY.",
+    )
+    parser.add_argument(
+        "-p", "--port", type=int, default=7111, help="Listener port. Default is 7111."
+    )
     parser.add_argument("-d", "--debug", action="store_true", help="Debug mode")
     parser.add_argument(
         "-t", "--timecode", action="store_true", help="Use timecode in message header"
     )
     args = parser.parse_args()
 
+    if args.addr:  # a non-empty host address was passed in.
+        ip_addr = args.addr
+    else:
+        ip_addr = socket.INADDR_ANY
+
     msg_type = Message.get_type(args.timecode)
 
-    msg_mgr = MessageManager("127.0.0.1", 7111, msg_type, debug=args.debug)
+    msg_mgr = MessageManager(
+        ip_address=ip_addr, port=args.port, msg_type=msg_type, debug=args.debug
+    )
 
     msg_mgr.run()

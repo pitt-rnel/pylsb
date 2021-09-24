@@ -5,7 +5,7 @@ import os
 import ctypes
 from typing import List
 import pyrtma.internal_types
-from pyrtma.internal_types import MessageHeader, Message
+from pyrtma.internal_types import Message
 from pyrtma.constants import *
 
 DEBUG = False
@@ -19,13 +19,14 @@ def debug_print(msg):
 
 
 class Client(object):
-    def __init__(self, module_id: int = 0, host_id: int = 0):
+    def __init__(self, module_id: int = 0, host_id: int = 0, timecode: bool = False):
         self.module_id = module_id
         self.host_id = host_id
         self.msg_count = 0
         self.start_time = time.time()
         self.server = None
         self.connected = False
+        self.msg_cls = Message.get_cls(timecode)
 
     def __del__(self):
         if self.connected:
@@ -137,7 +138,7 @@ class Client(object):
             )
 
         # Assume that msg_type, num_data_bytes, data - have been filled in
-        header = MessageHeader()
+        header = self.msg_cls.header_type()
         header.msg_type = pyrtma.internal_types.MT[signal_name]
         header.msg_count = self.msg_count
         header.send_time = time.time()
@@ -184,7 +185,7 @@ class Client(object):
             )
 
         # Assume that msg_type, num_data_bytes, data - have been filled in
-        header = MessageHeader()
+        header = self.msg_cls.header_type()
         header.msg_type = pyrtma.internal_types.MT[msg_data.__class__.__name__]
         header.msg_count = self.msg_count
         header.send_time = time.time()
@@ -224,7 +225,7 @@ class Client(object):
 
         # Read RTMA Header Section
         if readfds:
-            msg = Message()
+            msg = self.msg_cls()
             view = memoryview(msg.header).cast("b")
             nbytes = self.sock.recv_into(view, msg.header_size, socket.MSG_WAITALL)
             assert (

@@ -145,7 +145,7 @@ class MessageManager:
         src_module.connected = True
         if src_module.is_logger:
             self.logger_modules.add(src_module)
-        src_module.send_ack()
+        # src_module.send_ack() # moved to process_message
 
     def remove_module(self, module: Module):
         # Drop all subscriptions for this module
@@ -160,21 +160,19 @@ class MessageManager:
         del self.modules[module.conn]
 
     def disconnect_module(self, src_module: Module):
-        src_module.send_ack()
+        # src_module.send_ack() # moved to process_message
         self.remove_module(src_module)
 
     def add_subscription(self, src_module: Module, msg: Message):
         sub = pyrtma.internal_types.Subscribe.from_buffer(msg.data)
         self.subscriptions[sub.msg_type].add(src_module)
         self.logger.info(f"SUBSCRIBE- {src_module!s} to MID:{sub.msg_type}")
-        src_module.send_ack()
 
     def remove_subscription(self, src_module: Module, msg: Message):
         sub = pyrtma.internal_types.Unsubscribe.from_buffer(msg.data)
         # Silently let modules unsubscribe from messages that they are not subscribed to.
         self.subscriptions[sub.msg_type].discard(src_module)
         self.logger.info(f"UNSUBSCRIBE- {src_module!s} to MID:{sub.msg_type}")
-        src_module.send_ack()
 
     def resume_subscription(self, src_module: Module, msg: Message):
         self.add_subscription(src_module, msg)
@@ -218,11 +216,7 @@ class MessageManager:
             )
 
         # Always forward to logger modules
-        for module in self.logger_modules:
-            if module.conn not in wlist:
-                # Block until logger is ready
-                select.select([], [module.conn], [], None)
-            module.send_message(msg)
+        self.send_to_loggers(msg, wlist)
 
         # Subscriber set for this message type
         subscribers = self.subscriptions[msg.header.msg_type]
@@ -236,6 +230,7 @@ class MessageManager:
                         return
                     else:
                         print("x", end="")
+                        self.send_failed_message(module, msg, time.time(), wlist)
                         return
 
         # Send to all subscribed modules
@@ -244,6 +239,54 @@ class MessageManager:
                 module.send_message(msg)
             else:
                 print("x", end="")
+                self.send_failed_message(module, msg, time.time(), wlist)
+
+    def send_to_loggers(self, msg: Message, wlist: List[socket.socket]):
+        for module in self.logger_modules:
+            if module.conn not in wlist:
+                # Block until logger is ready
+                select.select([], [module.conn], [], None)
+            module.send_message(msg)
+
+    def send_ack(self, src_module: Module, wlist: List[socket.socket]):
+        # src_module.send_ack()
+
+        ack_msg = self.msg_type()
+        ack_msg.header.msg_type = pyrtma.internal_types.MT["Acknowledge"]
+        ack_msg.header.send_time = time.time()
+        ack_msg.header.src_mod_id = pyrtma.constants.MID_MESSAGE_MANAGER
+        ack_msg.header.dest_mod_id = src_module.id
+        ack_msg.header.num_data_bytes = 0
+
+        src_module.send_message(ack_msg)
+
+        # Always forward to logger modules
+        self.send_to_loggers(ack_msg, wlist)
+
+    def send_failed_message(
+        self,
+        dest_module: Module,
+        msg: Message,
+        time_of_failure: float,
+        wlist: List[socket.socket],
+    ):
+
+        failed_msg = self.msg_type()
+        failed_msg.header.msg_type = pyrtma.internal_types.MT["FailedMessage"]
+        failed_msg.header.send_time = time.time()
+        failed_msg.header.src_mod_id = pyrtma.constants.MID_MESSAGE_MANAGER
+
+        failed_msg_data = pyrtma.internal_types.FailedMessage.from_buffer(
+            failed_msg.data
+        )
+        failed_msg_data.dest_mod_id = dest_module.id
+        failed_msg_data.time_of_failure = time_of_failure
+        failed_msg_data.msg_header = msg.header
+
+        failed_msg.header.num_data_bytes = ctypes.sizeof(failed_msg_data)
+
+        # send to logger modules AND modules subscribed to FAILED_MESSAGE
+        self.forward_message(failed_msg, wlist)
 
     def process_message(
         self, src_module: Module, msg: Message, wlist: List[socket.socket]
@@ -252,18 +295,24 @@ class MessageManager:
 
         if msg_name == "Connect":
             self.connect_module(src_module, msg)
+            self.send_ack(src_module, wlist)
             self.logger.info(f"CONNECT - {src_module!s}")
         elif msg_name == "Disconnect":
+            self.send_ack(src_module, wlist)
             self.disconnect_module(src_module)
             self.logger.info(f"DISCONNECT - {src_module!s}")
         elif msg_name == "Subscribe":
             self.add_subscription(src_module, msg)
+            self.send_ack(src_module, wlist)
         elif msg_name == "Unsubscribe":
             self.remove_subscription(src_module, msg)
+            self.send_ack(src_module, wlist)
         elif msg_name == "PauseSubscription":
             self.pause_subscription(src_module, msg)
+            self.send_ack(src_module, wlist)
         elif msg_name == "ResumeSubscription":
             self.resume_subscription(src_module, msg)
+            self.send_ack(src_module, wlist)
         else:
             self.logger.info(f"FORWARD - {msg_name} from {src_module!s}")
             self.forward_message(msg, wlist)

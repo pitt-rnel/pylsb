@@ -12,6 +12,7 @@ MT["Exit"] = 0
 MT["Kill"] = 1
 MT["Acknowledge"] = 2
 MT["FailSubscribe"] = 6
+MT["FailedMessage"] = 8
 MT["Connect"] = 13
 MT["Disconnect"] = 14
 MT["Subscribe"] = 15

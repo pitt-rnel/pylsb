@@ -1,10 +1,11 @@
 import sys
 import ctypes
+from time import time
 
 sys.path.append("../")
 # from pyrtma.client import rtmaClient
 # from pyrtma.message import AddMessage, Message
-import pyrtma.types
+import pyrtma.internal_types
 from pyrtma.client import Client
 
 
@@ -21,14 +22,14 @@ class USER_MESSAGE(ctypes.Structure):
 MT_USER_MESSAGE = 1234
 
 # Add the message definition to pyrtma.core module internal dictionary
-pyrtma.types.AddMessage(
+pyrtma.internal_types.AddMessage(
     msg_name="USER_MESSAGE", msg_type=MT_USER_MESSAGE, msg_def=USER_MESSAGE
 )
 
 
-def publisher(server="127.0.0.1:7111"):
+def publisher(server="127.0.0.1:7111", timecode=False):
     # Setup Client
-    mod = Client()
+    mod = Client(timecode=timecode)
     mod.connect(server_name=server)
 
     # Build a packet to send
@@ -50,9 +51,9 @@ def publisher(server="127.0.0.1:7111"):
             break
 
 
-def subscriber(server="127.0.0.1:7111"):
+def subscriber(server="127.0.0.1:7111", timecode=False):
     # Setup Client
-    mod = Client()
+    mod = Client(timecode=timecode)
     mod.connect(server_name=server)
 
     # Select the messages to receive
@@ -80,6 +81,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--server", default="127.0.0.1:7111", help="RTMA Message Manager ip address."
     )
+    parser.add_argument(
+        "-t", "--timecode", action="store_true", help="Use timecode in message header"
+    )
     group = parser.add_mutually_exclusive_group()
     group.add_argument(
         "--pub", default=False, action="store_true", help="Run as publisher."
@@ -92,9 +96,9 @@ if __name__ == "__main__":
 
     if args.pub:
         print("pyrtma Publisher")
-        publisher(args.server)
+        publisher(args.server, timecode=args.timecode)
     elif args.sub:
         print("pyrtma Subscriber")
-        subscriber(args.server)
+        subscriber(args.server, timecode=args.timecode)
     else:
         print("Unknown input")

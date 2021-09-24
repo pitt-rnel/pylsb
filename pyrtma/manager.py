@@ -19,20 +19,20 @@ class Module:
 
     conn: socket.socket
     address: Tuple[str, int]
-    msg_type: Type[Message]
+    msg_cls: Type[Message]
     id: int = 0
     pid: int = 0
     connected: bool = False
     is_logger: bool = False
 
     def send_message(self, msg: Message):
-        msg_size = self.msg_type.header_size + msg.header.num_data_bytes
+        msg_size = self.msg_cls.header_size + msg.header.num_data_bytes
         payload = memoryview(msg).cast("b")[:msg_size]
         self.conn.sendall(payload)
 
     def send_ack(self):
         # Just send a header
-        header = self.msg_type.header_type()
+        header = self.msg_cls.header_type()
         header.msg_type = pyrtma.internal_types.MT["Acknowledge"]
         header.send_time = time.time()
         header.src_mod_id = pyrtma.constants.MID_MESSAGE_MANAGER
@@ -56,13 +56,13 @@ class MessageManager:
         self,
         ip_address: Union[str, int] = socket.INADDR_ANY,
         port: int = 7111,
-        msg_type: Type[Message] = DefaultMessage,
+        timecode=False,
         debug=False,
     ):
 
         self.ip_address = ip_address
         self.port = port
-        self.msg_type = msg_type
+        self.msg_cls = Message.get_cls(timecode)
         self.read_timeout = 0.200
         self.write_timeout = 0  # c++ message manager uses timeout = 0 for all modules except logger modules, which uses -1 (blocking)
         self._debug = debug
@@ -93,7 +93,7 @@ class MessageManager:
         mm_module = Module(
             conn=self.listen_socket,
             address=(ip_address, port),
-            msg_type=self.msg_type,
+            msg_cls=self.msg_cls,
             id=0,
             connected=True,
             is_logger=False,
@@ -101,8 +101,8 @@ class MessageManager:
 
         self.modules[self.listen_socket] = mm_module
 
-        self.header_size = self.msg_type.header_size
-        self.recv_buffer = bytearray(ctypes.sizeof(self.msg_type))
+        self.header_size = self.msg_cls.header_size
+        self.recv_buffer = bytearray(ctypes.sizeof(self.msg_cls))
         self.data_view = memoryview(self.recv_buffer[self.header_size :])
 
         # Address Reuse allowed for testing
@@ -183,7 +183,7 @@ class MessageManager:
     def read_message(self, sock: socket.socket) -> Message:
         # Read RTMA Header Section
         nbytes = sock.recv_into(self.recv_buffer, self.header_size, socket.MSG_WAITALL)
-        msg = self.msg_type.from_buffer(self.recv_buffer)
+        msg = self.msg_cls.from_buffer(self.recv_buffer)
 
         # Read Data Section
         if msg.header.num_data_bytes > 0:
@@ -339,7 +339,7 @@ class MessageManager:
                         )
 
                         self.sockets.append(conn)
-                        self.modules[conn] = Module(conn, address, self.msg_type)
+                        self.modules[conn] = Module(conn, address, self.msg_cls)
                     except ValueError:
                         pass
 
@@ -387,10 +387,8 @@ if __name__ == "__main__":
     else:
         ip_addr = socket.INADDR_ANY
 
-    msg_type = Message.get_type(args.timecode)
-
     msg_mgr = MessageManager(
-        ip_address=ip_addr, port=args.port, msg_type=msg_type, debug=args.debug
+        ip_address=ip_addr, port=args.port, timecode=args.timecode, debug=args.debug
     )
 
     msg_mgr.run()

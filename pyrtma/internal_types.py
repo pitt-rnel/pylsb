@@ -64,7 +64,7 @@ class Message(ctypes.Structure):
     """Subclasses of Message must implement _fields_, header_size, and header_type"""
 
     @staticmethod
-    def get_type(timecode: bool) -> Type["Message"]:
+    def get_cls(timecode: bool) -> Type["Message"]:
         if timecode:
             return TimeCodeMessage
         else:

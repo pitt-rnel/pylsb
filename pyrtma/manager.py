@@ -251,7 +251,7 @@ class MessageManager:
     def send_ack(self, src_module: Module, wlist: List[socket.socket]):
         # src_module.send_ack()
 
-        ack_msg = self.msg_type()
+        ack_msg = self.msg_cls()
         ack_msg.header.msg_type = pyrtma.internal_types.MT["Acknowledge"]
         ack_msg.header.send_time = time.time()
         ack_msg.header.src_mod_id = pyrtma.constants.MID_MESSAGE_MANAGER
@@ -271,7 +271,7 @@ class MessageManager:
         wlist: List[socket.socket],
     ):
 
-        failed_msg = self.msg_type()
+        failed_msg = self.msg_cls()
         failed_msg.header.msg_type = pyrtma.internal_types.MT["FailedMessage"]
         failed_msg.header.send_time = time.time()
         failed_msg.header.src_mod_id = pyrtma.constants.MID_MESSAGE_MANAGER

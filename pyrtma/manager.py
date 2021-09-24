@@ -56,13 +56,13 @@ class MessageManager:
         self,
         ip_address: Union[str, int] = socket.INADDR_ANY,
         port: int = 7111,
-        msg_cls: Type[Message] = DefaultMessage,
+        timecode=False,
         debug=False,
     ):
 
         self.ip_address = ip_address
         self.port = port
-        self.msg_cls = msg_cls
+        self.msg_cls = Message.get_cls(timecode)
         self.read_timeout = 0.200
         self.write_timeout = 0  # c++ message manager uses timeout = 0 for all modules except logger modules, which uses -1 (blocking)
         self._debug = debug
@@ -338,10 +338,8 @@ if __name__ == "__main__":
     else:
         ip_addr = socket.INADDR_ANY
 
-    msg_cls = Message.get_cls(args.timecode)
-
     msg_mgr = MessageManager(
-        ip_address=ip_addr, port=args.port, msg_cls=msg_cls, debug=args.debug
+        ip_address=ip_addr, port=args.port, timecode=args.timecode, debug=args.debug
     )
 
     msg_mgr.run()

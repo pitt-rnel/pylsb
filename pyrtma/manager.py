@@ -122,7 +122,9 @@ class MessageManager:
 
         # Console Log
         console = logging.StreamHandler()
-        console.setLevel(logging.DEBUG)
+        console.setLevel(
+            logging.DEBUG
+        )  # should eventually change this to WARNING. Could be a class property or tied to _debug property
         console.setFormatter(formatter)
         self.logger.addHandler(console)
 
@@ -229,7 +231,7 @@ class MessageManager:
                         module.send_message(msg)
                         return
                     else:
-                        print("x", end="")
+                        print("x", end="", flush=True)
                         self.send_failed_message(module, msg, time.time(), wlist)
                         return
 
@@ -238,7 +240,7 @@ class MessageManager:
             if module.conn in wlist:
                 module.send_message(msg)
             else:
-                print("x", end="")
+                print("x", end="", flush=True)
                 self.send_failed_message(module, msg, time.time(), wlist)
 
     def send_to_loggers(self, msg: Message, wlist: List[socket.socket]):

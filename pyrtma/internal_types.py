@@ -27,6 +27,7 @@ MT["ResetMessageLog"] = 60
 MT["DumpMessageLog"] = 61
 MT["ForceDisconnect"] = 82
 MT["ModuleReady"] = 26
+MT["TimingMessage"] = 80
 
 # START OF RTMA INTERNAL MESSAGE DEFINITIONS
 
@@ -147,6 +148,14 @@ class SaveMessageLog(ctypes.Structure):
     _fields_ = [
         ("pathname", ctypes.c_char * MAX_LOGGER_FILENAME_LENGTH),
         ("pathname_length", ctypes.c_int),
+    ]
+
+
+class TimingMessage(ctypes.Structure):
+    _fields_ = [
+        ("timing", ctypes.c_ushort * MAX_MESSAGE_TYPES),
+        ("ModulePID", ctypes.c_int * MAX_MODULES),
+        ("send_time", ctypes.c_double),
     ]
 
 

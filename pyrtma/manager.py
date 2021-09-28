@@ -1,4 +1,4 @@
-from collections import defaultdict
+from collections import defaultdict, Counter
 import socket
 import select
 import argparse
@@ -8,6 +8,7 @@ import time
 import random
 import ctypes
 from typing import Dict, List, Tuple, Set, Type, Union
+import os
 
 import pyrtma.internal_types
 import pyrtma.constants
@@ -84,6 +85,11 @@ class MessageManager:
         self.sockets = [self.listen_socket]
         self.start_time = time.time()
 
+        # dictionary of message type ids and message counts, reset each time timing_message is sent
+        self.message_counts = Counter()
+        self.t_last_message_count = time.time()
+        self.min_timing_message_period = 0.9
+
         # Disable Nagle Algorithm
         self.listen_socket.setsockopt(
             socket.getprotobyname("tcp"), socket.TCP_NODELAY, 1
@@ -95,6 +101,7 @@ class MessageManager:
             address=(ip_address, port),
             msg_cls=self.msg_cls,
             id=0,
+            pid=os.getpid(),
             connected=True,
             is_logger=False,
         )
@@ -181,6 +188,10 @@ class MessageManager:
 
     def pause_subscription(self, src_module: Module, msg: Message):
         self.remove_subscription(src_module, msg)
+
+    def register_module_ready(self, src_module: Module, msg: Message):
+        mr = pyrtma.internal_types.ModuleReady.from_buffer(msg.data)
+        src_module.pid = mr.pid
 
     def read_message(self, sock: socket.socket) -> Message:
         # Read RTMA Header Section
@@ -291,6 +302,30 @@ class MessageManager:
         # send to logger modules AND modules subscribed to FAILED_MESSAGE
         self.forward_message(failed_msg, wlist)
 
+        # add to message count
+        self.message_counts[failed_msg.header.msg_type] += 1
+
+    def send_timing_message(self, wlist: List[socket.socket]):
+        tmsg = self.msg_cls()
+        tmsg.header.msg_type = pyrtma.internal_types.MT["TimingMessage"]
+        tmsg.header.send_time = time.time()
+        tmsg.src_mod_id = pyrtma.constants.MID_MESSAGE_MANAGER
+
+        tmsg_data = pyrtma.internal_types.TimingMessage()
+        tmsg.header.num_data_bytes = ctypes.sizeof(tmsg_data)
+        tmsg_data.send_time = time.time()
+
+        for (mt, count) in self.message_counts.items():
+            tmsg_data.timing[mt] = count
+        self.message_counts.clear()
+
+        for mod in self.modules.values():
+            tmsg_data.ModulePID[mod.id] = mod.pid
+
+        # TODO add support for message data > 9kb or change message definition to a smaller packet
+        # TODO send message (either combine header and data first or send separately)
+        # self.forward_message(tmsg, wlist)
+
     def process_message(
         self, src_module: Module, msg: Message, wlist: List[socket.socket]
     ):
@@ -316,9 +351,17 @@ class MessageManager:
         elif msg_name == "ResumeSubscription":
             self.resume_subscription(src_module, msg)
             self.send_ack(src_module, wlist)
+        elif msg_name == "ModuleReady":  # used to store module pids
+            self.register_module_ready(src_module, msg)
         else:
             self.logger.info(f"FORWARD - {msg_name} from {src_module!s}")
             self.forward_message(msg, wlist)
+
+        # message counts
+        self.message_counts[msg.header.msg_type] += 1
+        if (time.time() - self.t_last_message_count) > self.min_timing_message_period:
+            self.send_timing_message(wlist)
+            self.t_last_message_count = time.time()
 
     def run(self):
         try:

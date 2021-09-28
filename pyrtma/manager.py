@@ -234,6 +234,7 @@ class MessageManager:
                         print("x", end="", flush=True)
                         self.send_failed_message(module, msg, time.time(), wlist)
                         return
+            return  # if specified dest_mod_id is not in subscribers, do not send message (other than to loggers)
 
         # Send to all subscribed modules
         for module in subscribers:

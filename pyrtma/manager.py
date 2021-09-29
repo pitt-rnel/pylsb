@@ -156,11 +156,21 @@ class MessageManager:
             f"MessageManager::assign_module_id: All valid dynamic IDs are in use"
         )
 
-    def connect_module(self, src_module: Module, msg: Message):
+    def connect_module(
+        self, src_module: Module, msg: Message
+    ):  # returns a success code
         src_mod_id = msg.header.src_mod_id
         if src_mod_id == 0:
             src_module.id = self.assign_module_id()
         else:
+            current_ids = [mod.id for mod in self.modules.values()]
+            if src_mod_id in current_ids:  # cannot have multiple modules with same ID
+                self.logger.info(f"CONNECT - {src_module!s}")
+                self.logger.error(
+                    f"MessageManager::connect_module: Module ID {src_module!s} already in use, connection refused."
+                )
+                self.remove_module(src_module)
+                return False
             src_module.id = src_mod_id
 
         # Convert the data blob into the correct msg struct
@@ -170,6 +180,7 @@ class MessageManager:
         if src_module.is_logger:
             self.logger_modules.add(src_module)
         # src_module.send_ack() # moved to process_message
+        return True
 
     def remove_module(self, module: Module):
         # Drop all subscriptions for this module
@@ -347,9 +358,9 @@ class MessageManager:
         msg_name = pyrtma.internal_types.MT_BY_ID.get(msg.header.msg_type)
 
         if msg_name == "Connect":
-            self.connect_module(src_module, msg)
-            self.send_ack(src_module, wlist)
-            self.logger.info(f"CONNECT - {src_module!s}")
+            if self.connect_module(src_module, msg):
+                self.send_ack(src_module, wlist)
+                self.logger.info(f"CONNECT - {src_module!s}")
         elif msg_name == "Disconnect":
             self.send_ack(src_module, wlist)
             self.disconnect_module(src_module)

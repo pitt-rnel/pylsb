@@ -80,6 +80,7 @@ class MessageManager:
         self.listen_socket.listen(socket.SOMAXCONN)
         self.modules: Dict[socket.socket, Module] = {}
         self.logger_modules: Set[Module] = set()
+        self.next_dynamic_mod_id_offset = 0
 
         self.subscriptions: Dict[int, Set[Module]] = defaultdict(set)
         self.sockets = [self.listen_socket]
@@ -137,12 +138,23 @@ class MessageManager:
 
     def assign_module_id(self):
         current_ids = [mod.id for mod in self.modules.values()]
-        next_id = max(current_ids) + 1
 
-        if next_id > 100:
-            return next_id
-        else:
-            return 10
+        MAX_DYN_IDS = pyrtma.constants.MAX_MODULES - pyrtma.constants.DYN_MOD_ID_START
+        for i in range(0, MAX_DYN_IDS):
+
+            mod_id = self.next_dynamic_mod_id_offset + pyrtma.constants.DYN_MOD_ID_START
+            self.next_dynamic_mod_id_offset += 1
+            if self.next_dynamic_mod_id_offset == MAX_DYN_IDS:
+                self.next_dynamic_mod_id_offset = 0
+
+            # check if mod id is already used, if it is, continue looping until we find an unused one
+            if mod_id not in current_ids:
+                return mod_id
+
+        # if we exit loop without returning, we failed to find a valid id
+        self.logger.error(
+            f"MessageManager::assign_module_id: All valid dynamic IDs are in use"
+        )
 
     def connect_module(self, src_module: Module, msg: Message):
         src_mod_id = msg.header.src_mod_id

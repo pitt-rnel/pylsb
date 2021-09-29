@@ -12,7 +12,7 @@ import os
 
 import pyrtma.internal_types
 import pyrtma.constants
-from pyrtma.internal_types import Message, DefaultMessage
+from pyrtma.internal_types import Message
 
 
 @dataclass

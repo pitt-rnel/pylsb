@@ -145,8 +145,11 @@ class MessageManager:
             return 10
 
     def connect_module(self, src_module: Module, msg: Message):
-        if src_module.id == 0:
+        src_mod_id = msg.header.src_mod_id
+        if src_mod_id == 0:
             src_module.id = self.assign_module_id()
+        else:
+            src_module.id = src_mod_id
 
         # Convert the data blob into the correct msg struct
         connect_info = pyrtma.internal_types.Connect.from_buffer(msg.data)

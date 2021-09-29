@@ -84,7 +84,7 @@ class Client(object):
 
     def send_module_ready(self):
         msg = pyrtma.internal_types.ModuleReady()
-        msg.data.pid = os.getpid()
+        msg.pid = os.getpid()
         self.send_message(msg)
 
     def _subscription_control(self, msg_list: List[str], ctrl_msg: str):

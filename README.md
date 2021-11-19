@@ -7,6 +7,11 @@ From root directory of the repo:
 $ pip install .
 ```
 ## Usage
+Launch MessageManager:
+```python
+python manager.py -a "127.0.0.1"
+```
+
 Create a module:
 ```python
 from pyrtma.client import Client
@@ -29,8 +34,8 @@ $ python example.py --sub
 
 Bench testing utility: 
 ```shell
-$ python testing/rtma_bench.py -h
-usage: rtma_bench.py [-h] [-ms MSG_SIZE] [-n NUM_MSGS] [-np NUM_PUBLISHERS]
+$ python testing/pyrtma_bench.py -h
+usage: pyrtma_bench.py [-h] [-ms MSG_SIZE] [-n NUM_MSGS] [-np NUM_PUBLISHERS]
                      [-ns NUM_SUBSCRIBERS] [-s SERVER]
 
 rtmaClient bench test utility

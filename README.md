@@ -8,7 +8,7 @@ $ pip install .
 ```
 ## Usage
 Launch MessageManager:
-```python
+```shell
 python manager.py -a "127.0.0.1"
 ```
 

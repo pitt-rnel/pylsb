@@ -9,7 +9,7 @@ $ pip install .
 ## Usage
 Launch MessageManager:
 ```shell
-python manager.py -a "127.0.0.1"
+$ python manager.py -a "127.0.0.1"
 ```
 
 Create a module:

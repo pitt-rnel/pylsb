@@ -59,6 +59,7 @@ class MessageManager:
         port: int = 7111,
         timecode=False,
         debug=False,
+        send_msg_timing=True
     ):
 
         self.ip_address = ip_address
@@ -67,6 +68,7 @@ class MessageManager:
         self.read_timeout = 0.200
         self.write_timeout = 0  # c++ message manager uses timeout = 0 for all modules except logger modules, which uses -1 (blocking)
         self._debug = debug
+        self.b_send_msg_timing = send_msg_timing
         self.logger = logging.getLogger(f"MessageManager@{ip_address}:{port}")
 
         if ip_address == socket.INADDR_ANY:
@@ -391,7 +393,7 @@ class MessageManager:
 
         # message counts
         self.message_counts[msg.header.msg_type] += 1
-        if (time.time() - self.t_last_message_count) > self.min_timing_message_period:
+        if self.b_send_msg_timing and (time.time() - self.t_last_message_count) > self.min_timing_message_period:
             self.send_timing_message(wlist)
             self.t_last_message_count = time.time()
 
@@ -458,6 +460,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-t", "--timecode", action="store_true", help="Use timecode in message header"
     )
+    parser.add_argument("-T", "--disable_timing_msg", action="store_true", help="Disable sending of TIMING_MESSAGE")
     args = parser.parse_args()
 
     if args.addr:  # a non-empty host address was passed in.
@@ -466,7 +469,7 @@ if __name__ == "__main__":
         ip_addr = socket.INADDR_ANY
 
     msg_mgr = MessageManager(
-        ip_address=ip_addr, port=args.port, timecode=args.timecode, debug=args.debug
+        ip_address=ip_addr, port=args.port, timecode=args.timecode, debug=args.debug, send_msg_timing=(not args.disable_timing_msg)
     )
 
     msg_mgr.run()

@@ -225,10 +225,18 @@ class MessageManager:
         msg = self.msg_cls.from_buffer(self.recv_buffer)
 
         # Read Data Section
-        if msg.header.num_data_bytes > 0:
+        if msg.header.num_data_bytes > pyrtma.internal_types.MAX_CONTIGUOUS_MESSAGE_DATA: # extra large message
+            lmsg = self.msg_cls.new_large_msg_cls(msg.header.num_data_bytes)()
+            lmsg.header = msg.header
+            nbytes = sock.recv_into(
+                lmsg.data, lmsg.header.num_data_bytes, socket.MSG_WAITALL
+            )
+            return lmsg
+        elif msg.header.num_data_bytes > 0:
             nbytes = sock.recv_into(
                 msg.data, msg.header.num_data_bytes, socket.MSG_WAITALL
             )
+        
 
         return msg
 
@@ -332,12 +340,12 @@ class MessageManager:
         self.message_counts[failed_msg.header.msg_type] += 1
 
     def send_timing_message(self, wlist: List[socket.socket]):
-        tmsg = self.msg_cls()
+        tmsg = self.msg_cls().new_large_msg_cls(ctypes.sizeof(pyrtma.internal_types.TimingMessage))()
         tmsg.header.msg_type = pyrtma.internal_types.MT["TimingMessage"]
         tmsg.header.send_time = time.time()
         tmsg.src_mod_id = pyrtma.constants.MID_MESSAGE_MANAGER
 
-        tmsg_data = pyrtma.internal_types.TimingMessage()
+        tmsg_data = pyrtma.internal_types.TimingMessage.from_buffer(tmsg.data)
         tmsg.header.num_data_bytes = ctypes.sizeof(tmsg_data)
         tmsg_data.send_time = time.time()
 
@@ -348,9 +356,7 @@ class MessageManager:
         for mod in self.modules.values():
             tmsg_data.ModulePID[mod.id] = mod.pid
 
-        # TODO add support for message data > 9kb or change message definition to a smaller packet
-        # TODO send message (either combine header and data first or send separately)
-        # self.forward_message(tmsg, wlist)
+        self.forward_message(tmsg, wlist)
 
     def process_message(
         self, src_module: Module, msg: Message, wlist: List[socket.socket]

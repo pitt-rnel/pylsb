@@ -76,6 +76,9 @@ class Message(ctypes.Structure):
         msg_name = MT_BY_ID[self.header.msg_type]
         return getattr(module, msg_name).from_buffer(self.data)
 
+    @staticmethod
+    def new_large_msg_cls(timecode: bool, msg_size: int) -> Type["Message"]:
+        return Message.get_cls(timecode).new_large_msg_cls(msg_size)
 
 class DefaultMessage(Message):
     _fields_ = [
@@ -87,6 +90,11 @@ class DefaultMessage(Message):
 
     header_type: ClassVar[Type[Message]] = MessageHeader
 
+    @staticmethod
+    def new_large_msg_cls(msg_size: int) -> Type["Message"]:
+        class LargeMessage(Message):
+            _fields_ = [("header", MessageHeader), ("data", ctypes.c_byte * msg_size)]
+        return LargeMessage
 
 class TimeCodeMessage(Message):
     _fields_ = [
@@ -97,7 +105,12 @@ class TimeCodeMessage(Message):
     header_size: ClassVar[int] = ctypes.sizeof(TimeCodeMessageHeader)
 
     header_type: ClassVar[Type[Message]] = TimeCodeMessageHeader
-
+    
+    @staticmethod
+    def new_large_msg_cls(msg_size: int) -> Type["Message"]:
+        class LargeMessage(Message):
+            _fields_ = [("header", TimeCodeMessageHeader), ("data", ctypes.c_byte * msg_size)]
+        return LargeMessage
 
 class Connect(ctypes.Structure):
     _fields_ = [("logger_status", ctypes.c_short), ("daemon_status", ctypes.c_short)]

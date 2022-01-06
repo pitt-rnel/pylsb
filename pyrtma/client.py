@@ -238,7 +238,16 @@ class Client(object):
             return None
 
         # Read Data Section
-        if msg.header.num_data_bytes > 0:
+        if msg.header.num_data_bytes > pyrtma.internal_types.MAX_CONTIGUOUS_MESSAGE_DATA: # extra large message
+            lmsg = self.msg_cls.new_large_msg_cls(msg.header.num_data_bytes)()
+            lmsg.header = msg.header
+            lmsg.msg_name = msg.msg_name
+            lmsg.msg_size = msg.msg_size
+            nbytes = self.sock.recv_into(
+                lmsg.data, lmsg.header.num_data_bytes, socket.MSG_WAITALL
+            )
+            return lmsg
+        elif msg.header.num_data_bytes > 0:
             nbytes = self.sock.recv_into(
                 msg.data, msg.header.num_data_bytes, socket.MSG_WAITALL
             )

@@ -276,7 +276,10 @@ class MessageManager:
             for module in subscribers:
                 if module.id == dest_mod_id:
                     if module.conn in wlist:
-                        module.send_message(msg)
+                        try:
+                            module.send_message(msg)
+                        except ConnectionError as err:
+                            self.logger.error(f"Connection Error on write to {module!s} - {err!s}")
                         return
                     else:
                         print("x", end="", flush=True)
@@ -287,7 +290,10 @@ class MessageManager:
         # Send to all subscribed modules
         for module in subscribers:
             if module.conn in wlist:
-                module.send_message(msg)
+                try:
+                    module.send_message(msg)
+                except ConnectionError as err:
+                    self.logger.error(f"Connection Error on write to {module!s} - {err!s}")
             else:
                 print("x", end="", flush=True)
                 self.send_failed_message(module, msg, time.time(), wlist)
@@ -297,7 +303,10 @@ class MessageManager:
             if module.conn not in wlist:
                 # Block until logger is ready
                 select.select([], [module.conn], [], None)
-            module.send_message(msg)
+            try:
+                module.send_message(msg)
+            except ConnectionError as err:
+                self.logger.error(f"Connection Error on write to {module!s} - {err!s}")
 
     def send_ack(self, src_module: Module, wlist: List[socket.socket]):
         # src_module.send_ack()
@@ -309,7 +318,10 @@ class MessageManager:
         ack_msg.header.dest_mod_id = src_module.id
         ack_msg.header.num_data_bytes = 0
 
-        src_module.send_message(ack_msg)
+        try:
+            src_module.send_message(ack_msg)
+        except ConnectionError as err:
+            self.logger.error(f"Connection Error on write to {src_module!s} - {err!s}")
 
         # Always forward to logger modules
         self.send_to_loggers(ack_msg, wlist)
@@ -437,10 +449,11 @@ class MessageManager:
                         src = self.modules[client_socket]
                         try:
                             msg = self.read_message(client_socket)
-                            self.process_message(src, msg, wlist)
                         except ConnectionError as err:
-                            self.logger.error(f"Connection Error, disconnecting  {src!s} - {err!s}", exc_info=1)
+                            self.logger.error(f"Connection Error on read, disconnecting  {src!s} - {err!s}")
                             self.disconnect_module(src)
+                            continue
+                        self.process_message(src, msg, wlist)
 
         except KeyboardInterrupt:
             self.logger.info("Stopping Message Manager")

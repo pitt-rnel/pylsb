@@ -438,7 +438,7 @@ class MessageManager:
                             msg = self.read_message(client_socket)
                             self.process_message(src, msg, wlist)
                         except ConnectionError as err:
-                            self.logger.info(f"Connection Error, disconnecting  {src!s} - {err!s}")
+                            self.logger.error(f"Connection Error, disconnecting  {src!s} - {err!s}", exc_info=1)
                             self.disconnect_module(src)
 
         except KeyboardInterrupt:

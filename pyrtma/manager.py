@@ -433,9 +433,14 @@ class MessageManager:
                         )
 
                     for client_socket in rlist:
-                        msg = self.read_message(client_socket)
                         src = self.modules[client_socket]
-                        self.process_message(src, msg, wlist)
+                        try:
+                            msg = self.read_message(client_socket)
+                            self.process_message(src, msg, wlist)
+                        except ConnectionError as err:
+                            self.logger.info(f"Connection Error, disconnecting  {src!s} - {err!s}")
+                            self.disconnect_module(src)
+
         except KeyboardInterrupt:
             self.logger.info("Stopping Message Manager")
         finally:

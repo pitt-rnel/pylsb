@@ -280,6 +280,8 @@ class MessageManager:
                             module.send_message(msg)
                         except ConnectionError as err:
                             self.logger.error(f"Connection Error on write to {module!s} - {err!s}")
+                            print("x", end="", flush=True)
+                            self.send_failed_message(module, msg, time.time(), wlist)
                         return
                     else:
                         print("x", end="", flush=True)
@@ -294,6 +296,8 @@ class MessageManager:
                     module.send_message(msg)
                 except ConnectionError as err:
                     self.logger.error(f"Connection Error on write to {module!s} - {err!s}")
+                    print("x", end="", flush=True)
+                    self.send_failed_message(module, msg, time.time(), wlist)
             else:
                 print("x", end="", flush=True)
                 self.send_failed_message(module, msg, time.time(), wlist)
@@ -307,6 +311,8 @@ class MessageManager:
                 module.send_message(msg)
             except ConnectionError as err:
                 self.logger.error(f"Connection Error on write to {module!s} - {err!s}")
+                print("x", end="", flush=True)
+                self.send_failed_message(module, msg, time.time(), wlist) # this could result in inifite recursion, this is prevented by send_failed_message returning if failed message type is failed_message.
 
     def send_ack(self, src_module: Module, wlist: List[socket.socket]):
         # src_module.send_ack()
@@ -322,6 +328,8 @@ class MessageManager:
             src_module.send_message(ack_msg)
         except ConnectionError as err:
             self.logger.error(f"Connection Error on write to {src_module!s} - {err!s}")
+            print("x", end="", flush=True)
+            self.send_failed_message(src_module, ack_msg, time.time(), wlist)
 
         # Always forward to logger modules
         self.send_to_loggers(ack_msg, wlist)
@@ -345,6 +353,9 @@ class MessageManager:
         failed_msg_data.dest_mod_id = dest_module.id
         failed_msg_data.time_of_failure = time_of_failure
         failed_msg_data.msg_header = msg.header
+
+        if failed_msg_data.msg_header.msg_type == pyrtma.internal_types.MT["FailedMessage"]: # avoid unlikely infinite recursion
+            return
 
         failed_msg.header.num_data_bytes = ctypes.sizeof(failed_msg_data)
 

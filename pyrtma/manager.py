@@ -70,7 +70,7 @@ class MessageManager:
         self._debug = debug
         self.b_send_msg_timing = send_msg_timing
         self.logger = logging.getLogger(f"MessageManager@{ip_address}:{port}")
-        self.console_log_level = logging.INFO # should eventually change this to WARNING or INFO. Could also tie to _debug property
+        self.console_log_level = logging.DEBUG # should eventually change this to WARNING or INFO. Could also tie to _debug property
 
         if ip_address == socket.INADDR_ANY:
             ip_address = ""  # bind and Module require a string input, '' is treated as INADDR_ANY by bind
@@ -412,7 +412,10 @@ class MessageManager:
         elif msg_name == "ModuleReady":  # used to store module pids
             self.register_module_ready(src_module, msg)
         else:
-            self.logger.debug(f"FORWARD - {msg_name} from {src_module!s}")
+            if msg_name:
+                self.logger.debug(f"FORWARD - {msg_name} from {src_module!s}")
+            else:
+                self.logger.debug(f"FORWARD - {msg.header.msg_type} from {src_module!s}")
             self.forward_message(msg, wlist)
 
         # message counts

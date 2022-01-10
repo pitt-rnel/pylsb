@@ -70,6 +70,7 @@ def publisher_loop(
         print(
             f"Publisher [{pub_id}] -> {num_msgs} messages | 0 messages/sec | 0 MB/sec | {dur:0.6f} sec "
         )
+    mod.disconnect()
 
 
 def subscriber_loop(sub_id=0, num_msgs=100000, msg_size=128, server="127.0.0.1:7111"):
@@ -128,6 +129,7 @@ def subscriber_loop(sub_id=0, num_msgs=100000, msg_size=128, server="127.0.0.1:7
         print(
             f"Subscriber [{sub_id:d}] -> {msg_count} messages | 0 messages/sec | 0 MB/sec | {dur:0.6f} sec "
         )
+    mod.disconnect()
 
 
 def create_test_msg(msg_size):
@@ -259,4 +261,5 @@ if __name__ == "__main__":
     for subscriber in subscribers:
         subscriber.join()
 
+    mod.disconnect()
     # print('Done!')

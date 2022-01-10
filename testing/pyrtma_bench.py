@@ -33,6 +33,8 @@ def publisher_loop(
     # Signal that publisher is ready
     mod.send_signal("PUBLISHER_READY")
 
+    print(f"Publisher [{pub_id}] waiting for subscribers ")
+
     # Wait for the subscribers to be ready
     num_subscribers_ready = 0
     while num_subscribers_ready < num_subscribers:
@@ -43,8 +45,11 @@ def publisher_loop(
 
     # Create TEST message with dummy data
     test_msg = create_test_msg(msg_size)()  # msg = pyrtma.Message("TEST")
+    test_msg_size = msg_size + mod.msg_cls.header_size
     if msg_size > 0:
         test_msg.data[:] = list(range(msg_size))
+
+    print(f"Publisher [{pub_id}] starting send loop ")
 
     # Send loop
     tic = time.perf_counter()
@@ -56,10 +61,15 @@ def publisher_loop(
 
     # Stats
     dur = toc - tic
-    data_rate = (msg_size + mod.msg_cls.header_size) * num_msgs / 1e6 / dur
-    print(
-        f"Publisher [{pub_id}] -> {num_msgs} messages | {int(num_msgs/dur)} messages/sec | {data_rate:0.1f} MB/sec | {dur:0.6f} sec "
-    )
+    if num_msgs > 0:
+        data_rate = test_msg_size * num_msgs / 1e6 / dur
+        print(
+            f"Publisher [{pub_id}] -> {num_msgs} messages | {int(num_msgs/dur)} messages/sec | {data_rate:0.1f} MB/sec | {dur:0.6f} sec "
+        )
+    else:
+        print(
+            f"Publisher [{pub_id}] -> {num_msgs} messages | 0 messages/sec | 0 MB/sec | {dur:0.6f} sec "
+        )
 
 
 def subscriber_loop(sub_id=0, num_msgs=100000, msg_size=128, server="127.0.0.1:7111"):
@@ -80,16 +90,20 @@ def subscriber_loop(sub_id=0, num_msgs=100000, msg_size=128, server="127.0.0.1:7
     mod.send_module_ready()
     mod.subscribe("TEST")
     mod.subscribe("Exit")
+    print(f"Subscriber [{sub_id:d}] Ready")
     mod.send_signal("SUBSCRIBER_READY")
 
     # Read Loop (Start clock after first TEST msg received)
     msg_count = 0
+    tic = 0.0
+    toc = 0.0
+    test_msg_size = msg_size + mod.msg_cls.header_size
     while msg_count < num_msgs:
         msg = mod.read_message(timeout=-1)
         if msg is not None:
             if msg.msg_name == "TEST":
                 if msg_count == 0:
-                    test_msg_size = msg.msg_size
+                    #test_msg_size = msg.msg_size
                     tic = time.perf_counter()
                 toc = time.perf_counter()
                 msg_count += 1
@@ -100,14 +114,19 @@ def subscriber_loop(sub_id=0, num_msgs=100000, msg_size=128, server="127.0.0.1:7
 
     # Stats
     dur = toc - tic
-    data_rate = (test_msg_size * num_msgs) / 1e6 / dur
-    if msg_count == num_msgs:
-        print(
-            f"Subscriber [{sub_id:d}] -> {msg_count} messages | {int((msg_count-1)/dur)} messages/sec | {data_rate:0.1f} MB/sec | {dur:0.6f} sec "
-        )
+    if num_msgs > 0:
+        data_rate = (test_msg_size * num_msgs) / 1e6 / dur
+        if msg_count == num_msgs:
+            print(
+                f"Subscriber [{sub_id:d}] -> {msg_count} messages | {int((msg_count-1)/dur)} messages/sec | {data_rate:0.1f} MB/sec | {dur:0.6f} sec "
+            )
+        else:
+            print(
+                f"Subscriber [{sub_id:d}] -> {msg_count} ({int(msg_count/num_msgs *100):0d}%) messages | {int((msg_count-1)/dur)} messages/sec | {data_rate:0.1f} MB/sec | {dur:0.6f} sec "
+            )
     else:
         print(
-            f"Subscriber [{sub_id:d}] -> {msg_count} ({int(msg_count/num_msgs *100):0d}%) messages | {int((msg_count-1)/dur)} messages/sec | {data_rate:0.1f} MB/sec | {dur:0.6f} sec "
+            f"Subscriber [{sub_id:d}] -> {msg_count} messages | 0 messages/sec | 0 MB/sec | {dur:0.6f} sec "
         )
 
 

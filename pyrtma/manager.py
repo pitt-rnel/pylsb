@@ -70,7 +70,7 @@ class MessageManager:
         self._debug = debug
         self.b_send_msg_timing = send_msg_timing
         self.logger = logging.getLogger(f"MessageManager@{ip_address}:{port}")
-        self.console_log_level = logging.DEBUG # should eventually change this to WARNING or INFO. Could also tie to _debug property
+        self.console_log_level = logging.INFO # should eventually change this to WARNING or INFO. Could also tie to _debug property
 
         if ip_address == socket.INADDR_ANY:
             ip_address = ""  # bind and Module require a string input, '' is treated as INADDR_ANY by bind

@@ -3,7 +3,7 @@ import select
 import time
 import os
 import ctypes
-from typing import List
+from typing import List, Optional
 import pyrtma.internal_types
 from pyrtma.internal_types import Message
 from pyrtma.constants import *
@@ -26,7 +26,7 @@ class Client(object):
         self.start_time = time.time()
         self.server = None
         self.connected = False
-        self.msg_cls = Message.get_cls(timecode)
+        self.header_cls = Message.get_header_cls(timecode)
 
     def __del__(self):
         if self.connected:
@@ -151,7 +151,7 @@ class Client(object):
             )
 
         # Assume that msg_type, num_data_bytes, data - have been filled in
-        header = self.msg_cls.header_type()
+        header = self.header_cls()
         header.msg_type = pyrtma.internal_types.MT[signal_name]
         header.msg_count = self.msg_count
         header.send_time = time.time()
@@ -198,7 +198,7 @@ class Client(object):
             )
 
         # Assume that msg_type, num_data_bytes, data - have been filled in
-        header = self.msg_cls.header_type()
+        header = self.header_cls()
         header.msg_type = pyrtma.internal_types.MT[msg_data.__class__.__name__]
         header.msg_count = self.msg_count
         header.send_time = time.time()
@@ -228,7 +228,7 @@ class Client(object):
             # Socket was not ready to receive data. Drop the packet.
             print("x", end="")
 
-    def read_message(self, timeout=-1, ack=False):
+    def read_message(self, timeout=-1, ack=False) -> Optional[Message]:
         if timeout >= 0:
             readfds, writefds, exceptfds = select.select([self.sock], [], [], timeout)
         else:
@@ -238,31 +238,22 @@ class Client(object):
 
         # Read RTMA Header Section
         if readfds:
-            msg = self.msg_cls()
-            view = memoryview(msg.header).cast("b")
-            nbytes = self.sock.recv_into(view, msg.header_size, socket.MSG_WAITALL)
+            header = self.header_cls()
+            nbytes = self.sock.recv_into(header, header.size, socket.MSG_WAITALL)
             assert (
-                nbytes == msg.header_size
+                nbytes == header.size
             ), "Did not send all the header to message manager."
-            msg.header.recv_time = time.time()
-            msg.msg_name = pyrtma.internal_types.MT_BY_ID[msg.header.msg_type]
-            msg.msg_size = msg.header_size + msg.header.num_data_bytes
+            header.recv_time = time.time()
         else:
             return None
 
+        msg = Message(header)
+        msg.msg_name = pyrtma.internal_types.MT_BY_ID[header.msg_type]
+
         # Read Data Section
-        if msg.header.num_data_bytes > pyrtma.internal_types.MAX_CONTIGUOUS_MESSAGE_DATA: # extra large message
-            lmsg = self.msg_cls.new_large_msg_cls(msg.header.num_data_bytes)()
-            lmsg.header = msg.header
-            lmsg.msg_name = msg.msg_name
-            lmsg.msg_size = msg.msg_size
+        if header.num_data_bytes:
             nbytes = self.sock.recv_into(
-                lmsg.data, lmsg.header.num_data_bytes, socket.MSG_WAITALL
-            )
-            return lmsg
-        elif msg.header.num_data_bytes > 0:
-            nbytes = self.sock.recv_into(
-                msg.data, msg.header.num_data_bytes, socket.MSG_WAITALL
+                msg.data_buffer, header.num_data_bytes, socket.MSG_WAITALL
             )
 
         return msg
@@ -304,7 +295,7 @@ class Client(object):
         time_remaining = timeout
         start_time = time.perf_counter()
         while msg is not None and time_remaining > 0:
-            msg = self.read_message(timeout = 0)
+            msg = self.read_message(timeout=0)
             time_now = time.perf_counter()
             time_waited = time_now - start_time
             time_remaining = timeout - time_waited

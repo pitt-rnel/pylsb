@@ -66,7 +66,7 @@ def subscriber(server="127.0.0.1:7111", timecode=False):
 
             if msg is not None:
                 if msg.msg_name == "USER_MESSAGE":
-                    print(msg)
+                    msg.hexdump()
                 elif msg.msg_name == "Exit":
                     print("Goodbye.")
                     break

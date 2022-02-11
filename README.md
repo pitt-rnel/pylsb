@@ -1,4 +1,4 @@
-# pyrtma
+# pyrtma [![Python package](https://github.com/pitt-rnel/pyrtma/actions/workflows/python-package.yml/badge.svg)](https://github.com/pitt-rnel/pyrtma/actions/workflows/python-package.yml)
 RTMA client written in python with no external dependencies. Supports the most used features only.
 
 **This project is under active development and experimentation. Do not use in production until a stable release has been issued.**

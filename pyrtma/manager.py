@@ -59,7 +59,7 @@ class MessageManager:
         port: int = 7111,
         timecode=False,
         debug=False,
-        send_msg_timing=True
+        send_msg_timing=True,
     ):
 
         self.ip_address = ip_address
@@ -70,7 +70,9 @@ class MessageManager:
         self._debug = debug
         self.b_send_msg_timing = send_msg_timing
         self.logger = logging.getLogger(f"MessageManager@{ip_address}:{port}")
-        self.console_log_level = logging.INFO # should eventually change this to WARNING or INFO. Could also tie to _debug property
+        self.console_log_level = (
+            logging.INFO
+        )  # should eventually change this to WARNING or INFO. Could also tie to _debug property
 
         if ip_address == socket.INADDR_ANY:
             ip_address = ""  # bind and Module require a string input, '' is treated as INADDR_ANY by bind
@@ -133,9 +135,7 @@ class MessageManager:
 
         # Console Log
         console = logging.StreamHandler()
-        console.setLevel(
-            self.console_log_level
-        )
+        console.setLevel(self.console_log_level)
         console.setFormatter(formatter)
         self.logger.addHandler(console)
 
@@ -228,7 +228,10 @@ class MessageManager:
         msg = self.msg_cls.from_buffer(self.recv_buffer)
 
         # Read Data Section
-        if msg.header.num_data_bytes > pyrtma.internal_types.MAX_CONTIGUOUS_MESSAGE_DATA: # extra large message
+        if (
+            msg.header.num_data_bytes
+            > pyrtma.internal_types.MAX_CONTIGUOUS_MESSAGE_DATA
+        ):  # extra large message
             lmsg = self.msg_cls.new_large_msg_cls(msg.header.num_data_bytes)()
             lmsg.header = msg.header
             nbytes = sock.recv_into(
@@ -239,7 +242,6 @@ class MessageManager:
             nbytes = sock.recv_into(
                 msg.data, msg.header.num_data_bytes, socket.MSG_WAITALL
             )
-        
 
         return msg
 
@@ -279,7 +281,9 @@ class MessageManager:
                         try:
                             module.send_message(msg)
                         except ConnectionError as err:
-                            self.logger.error(f"Connection Error on write to {module!s} - {err!s}")
+                            self.logger.error(
+                                f"Connection Error on write to {module!s} - {err!s}"
+                            )
                             print("x", end="", flush=True)
                             self.send_failed_message(module, msg, time.time(), wlist)
                         return
@@ -295,7 +299,9 @@ class MessageManager:
                 try:
                     module.send_message(msg)
                 except ConnectionError as err:
-                    self.logger.error(f"Connection Error on write to {module!s} - {err!s}")
+                    self.logger.error(
+                        f"Connection Error on write to {module!s} - {err!s}"
+                    )
                     print("x", end="", flush=True)
                     self.send_failed_message(module, msg, time.time(), wlist)
             else:
@@ -312,7 +318,9 @@ class MessageManager:
             except ConnectionError as err:
                 self.logger.error(f"Connection Error on write to {module!s} - {err!s}")
                 print("x", end="", flush=True)
-                self.send_failed_message(module, msg, time.time(), wlist) # this could result in inifite recursion, this is prevented by send_failed_message returning if failed message type is failed_message.
+                self.send_failed_message(
+                    module, msg, time.time(), wlist
+                )  # this could result in inifite recursion, this is prevented by send_failed_message returning if failed message type is failed_message.
 
     def send_ack(self, src_module: Module, wlist: List[socket.socket]):
         # src_module.send_ack()
@@ -354,7 +362,10 @@ class MessageManager:
         failed_msg_data.time_of_failure = time_of_failure
         failed_msg_data.msg_header = msg.header
 
-        if failed_msg_data.msg_header.msg_type == pyrtma.internal_types.MT["FailedMessage"]: # avoid unlikely infinite recursion
+        if (
+            failed_msg_data.msg_header.msg_type
+            == pyrtma.internal_types.MT["FailedMessage"]
+        ):  # avoid unlikely infinite recursion
             return
 
         failed_msg.header.num_data_bytes = ctypes.sizeof(failed_msg_data)
@@ -366,7 +377,9 @@ class MessageManager:
         self.message_counts[failed_msg.header.msg_type] += 1
 
     def send_timing_message(self, wlist: List[socket.socket]):
-        tmsg = self.msg_cls().new_large_msg_cls(ctypes.sizeof(pyrtma.internal_types.TimingMessage))()
+        tmsg = self.msg_cls().new_large_msg_cls(
+            ctypes.sizeof(pyrtma.internal_types.TimingMessage)
+        )()
         tmsg.header.msg_type = pyrtma.internal_types.MT["TimingMessage"]
         tmsg.header.send_time = time.time()
         tmsg.src_mod_id = pyrtma.constants.MID_MESSAGE_MANAGER
@@ -415,12 +428,18 @@ class MessageManager:
             if msg_name:
                 self.logger.debug(f"FORWARD - {msg_name} from {src_module!s}")
             else:
-                self.logger.debug(f"FORWARD - {msg.header.msg_type} from {src_module!s}")
+                self.logger.debug(
+                    f"FORWARD - {msg.header.msg_type} from {src_module!s}"
+                )
             self.forward_message(msg, wlist)
 
         # message counts
         self.message_counts[msg.header.msg_type] += 1
-        if self.b_send_msg_timing and (time.time() - self.t_last_message_count) > self.min_timing_message_period:
+        if (
+            self.b_send_msg_timing
+            and (time.time() - self.t_last_message_count)
+            > self.min_timing_message_period
+        ):
             self.send_timing_message(wlist)
             self.t_last_message_count = time.time()
 
@@ -464,7 +483,9 @@ class MessageManager:
                         try:
                             msg = self.read_message(client_socket)
                         except ConnectionError as err:
-                            self.logger.error(f"Connection Error on read, disconnecting  {src!s} - {err!s}")
+                            self.logger.error(
+                                f"Connection Error on read, disconnecting  {src!s} - {err!s}"
+                            )
                             self.disconnect_module(src)
                             continue
                         self.process_message(src, msg, wlist)
@@ -493,7 +514,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "-t", "--timecode", action="store_true", help="Use timecode in message header"
     )
-    parser.add_argument("-T", "--disable_timing_msg", action="store_true", help="Disable sending of TIMING_MESSAGE")
+    parser.add_argument(
+        "-T",
+        "--disable_timing_msg",
+        action="store_true",
+        help="Disable sending of TIMING_MESSAGE",
+    )
     args = parser.parse_args()
 
     if args.addr:  # a non-empty host address was passed in.
@@ -502,7 +528,11 @@ if __name__ == "__main__":
         ip_addr = socket.INADDR_ANY
 
     msg_mgr = MessageManager(
-        ip_address=ip_addr, port=args.port, timecode=args.timecode, debug=args.debug, send_msg_timing=(not args.disable_timing_msg)
+        ip_address=ip_addr,
+        port=args.port,
+        timecode=args.timecode,
+        debug=args.debug,
+        send_msg_timing=(not args.disable_timing_msg),
     )
 
     msg_mgr.run()

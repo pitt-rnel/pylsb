@@ -104,7 +104,7 @@ def subscriber_loop(sub_id=0, num_msgs=100000, msg_size=128, server="127.0.0.1:7
         if msg is not None:
             if msg.msg_name == "TEST":
                 if msg_count == 0:
-                    #test_msg_size = msg.msg_size
+                    # test_msg_size = msg.msg_size
                     tic = time.perf_counter()
                 toc = time.perf_counter()
                 msg_count += 1

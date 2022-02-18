@@ -1,6 +1,7 @@
 import ctypes
 import sys
-from typing import ClassVar, Type
+import io
+from typing import ClassVar, Type, Optional, Any
 from .constants import *
 
 module = sys.modules["pyrtma.internal_types"]
@@ -53,6 +54,14 @@ class MessageHeader(ctypes.Structure):
         ("reserved", ctypes.c_int),
     ]
 
+    @property
+    def size(self):
+        return ctypes.sizeof(self)
+
+    @property
+    def buffer(self):
+        return memoryview(self)
+
 
 class TimeCodeMessageHeader(MessageHeader):
     _fields_ = [
@@ -61,56 +70,118 @@ class TimeCodeMessageHeader(MessageHeader):
     ]
 
 
-class Message(ctypes.Structure):
-    """Subclasses of Message must implement _fields_, header_size, and header_type"""
+class Message:
+    _header: MessageHeader
+    _buffer: bytes
+    _data: Any
+    _data_set: bool = False
 
-    @staticmethod
-    def get_cls(timecode: bool) -> Type["Message"]:
-        if timecode:
-            return TimeCodeMessage
+    def __init__(self, header: MessageHeader, data: Any = None):
+        self.header = header
+
+        # TODO: Add some checks for header mismatch
+        if data:
+            self.data = data
+
+    def _reset(self, header: MessageHeader):
+        # Allocate a buffer for the header and expected data
+        self._buffer = bytearray(header.size + header.num_data_bytes)
+
+        # Create views into the buffer
+        self._view = memoryview(self._buffer)
+        self._hdr_view = self._view[: header.size]
+        self._data_view = self._view[header.size :]
+
+        # Copy the header into the internal buffer
+        self._hdr_view[:] = bytes(header)
+        self._header = type(header).from_buffer(self._hdr_view)
+
+        # Flag to indicate if data was unpacked
+        self._data_set: bool = False
+
+    def pack(self, format=None) -> bytes:
+        # TODO: Should support other packing formats
+        return self._buffer
+
+    def unpack(self, format=None) -> Any:
+        # TODO: Should support other unpacking formats
+        msg_name = MT_BY_ID[self._header.msg_type]
+        data = getattr(module, msg_name).from_buffer(self._data_view)
+        self._data = data
+        self._data_set = True
+        return data
+
+    @property
+    def hdr_buffer(self):
+        return self._hdr_view
+
+    @property
+    def data_buffer(self):
+        return self._data_view
+
+    @property
+    def data(self):
+        if not self._data_set:
+            return self.unpack()
         else:
-            return DefaultMessage
+            return self._data
 
-    def cast_data(self):
-        # Get the message data type
-        msg_name = MT_BY_ID[self.header.msg_type]
-        return getattr(module, msg_name).from_buffer(self.data)
+    @data.setter
+    def data(self, new_data):
+        """Copy new message data directly."""
+        self._data_view[:] = bytes(new_data)
+        self.unpack()
+
+    @property
+    def header_cls(self):
+        return type(self._header)
+
+    @property
+    def header_size(self):
+        return self._header.size
+
+    @property
+    def header(self):
+        return self._header
+
+    @property
+    def size(self):
+        return self._header.num_data_bytes
+
+    @header.setter
+    def header(self, new_header: MessageHeader):
+        self._reset(new_header)
+
+    def dump(self):
+        """Return a copy of the internal buffer."""
+        return bytes(self._buffer)
+
+    def hexdump(self, length=16, sep=" "):
+        src = self._buffer
+        FILTER = "".join(
+            [(len(repr(chr(x))) == 3) and chr(x) or sep for x in range(256)]
+        )
+        for c in range(0, len(src), length):
+            chars = src[c : c + length]
+            hex_ = " ".join(["{:02x}".format(x) for x in chars])
+            if len(hex_) > 24:
+                hex_ = "{} {}".format(hex_[:24], hex_[24:])
+            printable = "".join(
+                ["{}".format((x <= 127 and FILTER[x]) or sep) for x in chars]
+            )
+            print(
+                "{0:08x}  {1:{2}s} |{3:{4}s}|".format(
+                    c, hex_, length * 3, printable, length
+                )
+            )
 
     @staticmethod
-    def new_large_msg_cls(timecode: bool, msg_size: int) -> Type["Message"]:
-        return Message.get_cls(timecode).new_large_msg_cls(msg_size)
+    def get_header_cls(timecode=False) -> Type[MessageHeader]:
+        if timecode:
+            return TimeCodeMessageHeader
+        else:
+            return MessageHeader
 
-class DefaultMessage(Message):
-    _fields_ = [
-        ("header", MessageHeader),
-        ("data", ctypes.c_byte * MAX_CONTIGUOUS_MESSAGE_DATA),
-    ]
-
-    header_size: ClassVar[int] = ctypes.sizeof(MessageHeader)
-
-    header_type: ClassVar[Type[Message]] = MessageHeader
-
-    @staticmethod
-    def new_large_msg_cls(msg_size: int) -> Type["Message"]:
-        class LargeMessage(Message):
-            _fields_ = [("header", MessageHeader), ("data", ctypes.c_byte * msg_size)]
-        return LargeMessage
-
-class TimeCodeMessage(Message):
-    _fields_ = [
-        ("header", TimeCodeMessageHeader),
-        ("data", ctypes.c_byte * MAX_CONTIGUOUS_MESSAGE_DATA),
-    ]
-
-    header_size: ClassVar[int] = ctypes.sizeof(TimeCodeMessageHeader)
-
-    header_type: ClassVar[Type[Message]] = TimeCodeMessageHeader
-    
-    @staticmethod
-    def new_large_msg_cls(msg_size: int) -> Type["Message"]:
-        class LargeMessage(Message):
-            _fields_ = [("header", TimeCodeMessageHeader), ("data", ctypes.c_byte * msg_size)]
-        return LargeMessage
 
 class Connect(ctypes.Structure):
     _fields_ = [("logger_status", ctypes.c_short), ("daemon_status", ctypes.c_short)]

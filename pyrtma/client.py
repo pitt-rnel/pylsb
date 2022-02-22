@@ -127,6 +127,8 @@ class Client(object):
             if self._connected:
                 self.send_signal("Disconnect")
                 ack_msg = self.wait_for_acknowledgement(timeout=0.5)
+        except AcknowledgementTimeout:
+            pass
         finally:
             self._sock.close()
             self._connected = False

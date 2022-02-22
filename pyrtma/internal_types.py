@@ -1,7 +1,6 @@
 import ctypes
 import sys
-import io
-from typing import ClassVar, Type, Optional, Any
+from typing import Type, Any
 from .constants import *
 
 module = sys.modules["pyrtma.internal_types"]

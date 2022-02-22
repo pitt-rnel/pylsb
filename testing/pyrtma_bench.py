@@ -45,7 +45,6 @@ def publisher_loop(
 
     # Create TEST message with dummy data
     test_msg = create_test_msg(msg_size)()  # msg = pyrtma.Message("TEST")
-    test_msg_size = msg_size + mod.msg_cls.header_size
     if msg_size > 0:
         test_msg.data[:] = list(range(msg_size))
 
@@ -62,7 +61,10 @@ def publisher_loop(
     # Stats
     dur = toc - tic
     if num_msgs > 0:
-        data_rate = test_msg_size * num_msgs / 1e6 / dur
+        data_rate = (
+            ctypes.sizeof(mod.header_cls)
+            + ctypes.sizeof(test_msg) * num_msgs / 1e6 / dur
+        )
         print(
             f"Publisher [{pub_id}] -> {num_msgs} messages | {int(num_msgs/dur)} messages/sec | {data_rate:0.1f} MB/sec | {dur:0.6f} sec "
         )
@@ -98,7 +100,7 @@ def subscriber_loop(sub_id=0, num_msgs=100000, msg_size=128, server="127.0.0.1:7
     msg_count = 0
     tic = 0.0
     toc = 0.0
-    test_msg_size = msg_size + mod.msg_cls.header_size
+    test_msg_size = msg_size + ctypes.sizeof(mod.header_cls)
     while msg_count < num_msgs:
         msg = mod.read_message(timeout=-1)
         if msg is not None:

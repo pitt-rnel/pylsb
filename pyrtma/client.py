@@ -5,10 +5,10 @@ import os
 import ctypes
 import pyrtma.internal_types
 
-from pyrtma.internal_types import Message
+from pyrtma.internal_types import Message, MessageHeader
 from pyrtma.constants import *
 from functools import wraps
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Type
 
 
 class ClientError(Exception):
@@ -154,6 +154,10 @@ class Client(object):
     @property
     def module_id(self) -> int:
         return self._module_id
+
+    @property
+    def header_cls(self) -> Type[MessageHeader]:
+        return self._header_cls
 
     @requires_connection
     def send_module_ready(self):

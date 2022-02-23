@@ -71,7 +71,8 @@ class Client(object):
         self._msg_count = 0
         self._server = ("", -1)
         self._connected = False
-        self._header_cls = Message.get_header_cls(timecode)
+        self._header_cls = Message.set_header_cls(timecode)
+        self._recv_buffer = bytearray(1024 ** 2)
 
     def __del__(self):
         if self._connected:
@@ -103,7 +104,7 @@ class Client(object):
         except ConnectionRefusedError as e:
             self._connected = False
             raise MessageManagerNotFound(
-                "No message manager server responding at {self.ip_addr}:{self.port}"
+                f"No message manager server responding at {self.ip_addr}:{self.port}"
             ) from e
 
         # Disable Nagle Algorithm
@@ -309,38 +310,25 @@ class Client(object):
 
         # Read RTMA Header Section
         if readfds:
-            header = self._header_cls()
-            nbytes = self._sock.recv_into(header, header.size, socket.MSG_WAITALL)
-            """
-            Note:
-            MSG_WAITALL Flag:
-            The receive request will complete only when one of the following events occurs:
+            msg = Message(buffer=self._recv_buffer)
+            nbytes = 0
+            while nbytes < msg.header_size:
+                nbytes += self._sock.recv_into(msg.hdr_buffer, msg.header_size - nbytes)
 
-            The buffer supplied by the caller is completely full.
-            The connection has been closed.
-            The request has been canceled or an error occurred.
-            """
-
-            if nbytes != header.size:
-                self._connected = False
-                raise ConnectionLost
-
-            header.recv_time = time.time()
+            msg.header.recv_time = time.time()
         else:
             return None
 
-        msg = Message(header)
-        msg.msg_name = pyrtma.internal_types.MT_BY_ID[header.msg_type]
+        msg.msg_name = pyrtma.internal_types.MT_BY_ID[msg.header.msg_type]
 
         # Read Data Section
-        if header.num_data_bytes:
-            nbytes = self._sock.recv_into(
-                msg.data_buffer, header.num_data_bytes, socket.MSG_WAITALL
-            )
-
-            if nbytes != header.num_data_bytes:
-                self._connected = False
-                raise ConnectionLost
+        # TODO: This loop can hang
+        if msg.data_size:
+            nbytes = 0
+            while nbytes != msg.data_size:
+                nbytes += self._sock.recv_into(
+                    msg.data_buffer, min(4096, msg.data_size - nbytes)
+                )
 
         return msg
 

@@ -1,6 +1,6 @@
 import ctypes
 import sys
-from typing import Type, Any
+from typing import Type, Any, Optional, ClassVar
 from .constants import *
 
 module = sys.modules["pyrtma.internal_types"]
@@ -70,37 +70,74 @@ class TimeCodeMessageHeader(MessageHeader):
 
 
 class Message:
-    _header: MessageHeader
-    _buffer: bytes
-    _data: Any
+    _header: Optional[MessageHeader] = None
+    _buffer: bytearray
+    _data: Any = None
     _data_set: bool = False
+    header_cls: ClassVar[Type[MessageHeader]] = MessageHeader
+    DEFAULT_DATA_SIZE: ClassVar[int] = 128
 
-    def __init__(self, header: MessageHeader, data: Any = None):
-        self.header = header
+    def __init__(
+        self,
+        header: Optional[MessageHeader] = None,
+        data: Any = None,
+        buffer: Optional[bytearray] = None,
+    ):
+        if buffer:
+            # User provided shared buffer
+            self._buffer = buffer
+        else:
+            # Default allocation
+            self._buffer = bytearray(self.header_size + Message.DEFAULT_DATA_SIZE)
 
-        # TODO: Add some checks for header mismatch
+        # Create view into the buffer
+        self._view = memoryview(self._buffer)
+
+        if header:
+            self.header = header
+
         if data:
             self.data = data
 
-    def _reset(self, header: MessageHeader):
-        # Allocate a buffer for the header and expected data
-        self._buffer = bytearray(header.size + header.num_data_bytes)
+    def _copy_header(self, header: MessageHeader):
+        # Check header type match
+        assert isinstance(header, self.header_cls)
 
-        # Create views into the buffer
-        self._view = memoryview(self._buffer)
-        self._hdr_view = self._view[: header.size]
-        self._data_view = self._view[header.size :]
+        # Extend the buffer for the header and expected data if needed
+        if (self.size) > self._bufsz:
+            self._view.release()
+            self._buffer.extend(bytearray(self.size - self._bufsz))
+
+            # Create view into the buffer
+            self._view = memoryview(self._buffer)
 
         # Copy the header into the internal buffer
         self._hdr_view[:] = bytes(header)
         self._header = type(header).from_buffer(self._hdr_view)
+
+        self._data_set: bool = False
+
+    def _new_header_from_buffer(self):
+        """Set new header into the message. Assumes header is filled in."""
+        header = Message.header_cls.from_buffer(self._view[: self.header_size])
+        msg_sz = header.size + header.num_data_bytes
+
+        # Extend the buffer for the header and expected data if needed
+        if (msg_sz) > self._bufsz:
+            self._view.release()
+            self._buffer.extend(bytearray((msg_sz) - self._bufsz))
+
+            # Create view into the buffer
+            self._view = memoryview(self._buffer)
+
+        self._header = header
 
         # Flag to indicate if data was unpacked
         self._data_set: bool = False
 
     def pack(self, format=None) -> bytes:
         # TODO: Should support other packing formats
-        return self._buffer
+        return self._view[: self.size]
 
     def unpack(self, format=None) -> Any:
         # TODO: Should support other unpacking formats
@@ -111,8 +148,20 @@ class Message:
         return data
 
     @property
+    def _bufsz(self) -> int:
+        return len(self._buffer)
+
+    @property
     def hdr_buffer(self):
-        return self._hdr_view
+        return self._view
+
+    @property
+    def _hdr_view(self):
+        return self._view[: self.header_size]
+
+    @property
+    def _data_view(self):
+        return self._view[self.header_size : self.size]
 
     @property
     def data_buffer(self):
@@ -132,31 +181,33 @@ class Message:
         self.unpack()
 
     @property
-    def header_cls(self):
-        return type(self._header)
+    def header_size(self) -> int:
+        return ctypes.sizeof(Message.header_cls)
 
     @property
-    def header_size(self):
-        return self._header.size
-
-    @property
-    def header(self):
+    def header(self) -> MessageHeader:
+        if self._header is None:
+            self._new_header_from_buffer()
         return self._header
-
-    @property
-    def size(self):
-        return self._header.num_data_bytes
 
     @header.setter
     def header(self, new_header: MessageHeader):
-        self._reset(new_header)
+        self._copy_header(new_header)
 
-    def dump(self):
+    @property
+    def data_size(self) -> int:
+        return self.header.num_data_bytes
+
+    @property
+    def size(self) -> int:
+        return self.header_size + self.data_size
+
+    def dump(self) -> bytes:
         """Return a copy of the internal buffer."""
         return bytes(self._buffer)
 
     def hexdump(self, length=16, sep=" "):
-        src = self._buffer
+        src = self._buffer[: self.size]
         FILTER = "".join(
             [(len(repr(chr(x))) == 3) and chr(x) or sep for x in range(256)]
         )
@@ -175,10 +226,12 @@ class Message:
             )
 
     @staticmethod
-    def get_header_cls(timecode=False) -> Type[MessageHeader]:
+    def set_header_cls(timecode=False) -> Type[MessageHeader]:
         if timecode:
+            Message.header_cls = TimeCodeMessageHeader
             return TimeCodeMessageHeader
         else:
+            Message.header_cls = MessageHeader
             return MessageHeader
 
 

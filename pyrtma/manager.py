@@ -12,7 +12,7 @@ import pyrtma.constants
 
 from pyrtma.internal_types import Message, MessageHeader
 
-from typing import Dict, List, Tuple, Set, Type, Union
+from typing import Dict, List, Tuple, Set, Type, Union, Optional
 from dataclasses import dataclass
 from collections import defaultdict, Counter
 
@@ -64,7 +64,8 @@ class MessageManager:
 
         self.ip_address = ip_address
         self.port = port
-        self.header_cls = Message.get_header_cls(timecode)
+
+        self.header_cls = Message.set_header_cls(timecode)
 
         self.read_timeout = 0.200
         self.write_timeout = 0  # c++ message manager uses timeout = 0 for all modules except logger modules, which uses -1 (blocking)
@@ -114,6 +115,8 @@ class MessageManager:
         )
 
         self.modules[self.listen_socket] = mm_module
+
+        self._buffer = bytearray(1024 ** 2)
 
         # Address Reuse allowed for testing
         if debug:
@@ -217,15 +220,25 @@ class MessageManager:
         mr = pyrtma.internal_types.ModuleReady.from_buffer(msg.data)
         src_module.pid = mr.pid
 
-    def read_message(self, sock: socket.socket) -> Message:
-        # Read RTMA Header Section
-        header = self.header_cls()
-        nbytes = sock.recv_into(header, header.size, socket.MSG_WAITALL)
+    def read_message(self, sock: socket.socket) -> Optional[Message]:
+        msg = Message(buffer=self._buffer)
 
-        msg = Message(header)
+        # Read RTMA Header Section
+        nbytes = sock.recv_into(msg.hdr_buffer, msg.header_size, socket.MSG_WAITALL)
+
+        if nbytes != msg.header_size:
+            mod = self.modules[sock]
+            self.remove_module(mod)
+            return None
 
         # Read Data Section
-        nbytes = sock.recv_into(msg.data_buffer, msg.size, socket.MSG_WAITALL)
+        # TODO: This loop can hang
+        if msg.data_size:
+            nbytes = 0
+            while nbytes < msg.data_size:
+                nbytes += sock.recv_into(
+                    msg.data_buffer[nbytes:], msg.data_size - nbytes
+                )
 
         return msg
 
@@ -316,7 +329,7 @@ class MessageManager:
         header.dest_mod_id = src_module.id
         header.num_data_bytes = 0
 
-        ack_msg = Message(header)
+        ack_msg = Message(header, buffer=self._buffer)
         try:
             src_module.send_message(ack_msg)
         except ConnectionError as err:
@@ -347,7 +360,7 @@ class MessageManager:
         data.time_of_failure = time_of_failure
         data.msg_header = msg.header
 
-        failed_msg = Message(header, data)
+        failed_msg = Message(header, data, buffer=self._buffer)
 
         if (
             failed_msg.data.msg_header.msg_type
@@ -371,7 +384,7 @@ class MessageManager:
         header.src_mod_id = pyrtma.constants.MID_MESSAGE_MANAGER
         header.num_data_bytes = ctypes.sizeof(data)
 
-        tmsg = Message(header, data)
+        tmsg = Message(header, data, buffer=self._buffer)
         tmsg.data.send_time = time.time()
 
         for (mt, count) in self.message_counts.items():
@@ -474,7 +487,9 @@ class MessageManager:
                             )
                             self.disconnect_module(src)
                             continue
-                        self.process_message(src, msg, wlist)
+
+                        if msg:
+                            self.process_message(src, msg, wlist)
 
         except KeyboardInterrupt:
             self.logger.info("Stopping Message Manager")

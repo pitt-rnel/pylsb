@@ -363,7 +363,7 @@ class Client(object):
 
     def discard_messages(self, timeout: float = 1) -> bool:
         """Read and discard messages in socket buffer up to timeout.
-            Returns: True if all messages available have been read.
+        Returns: True if all messages available have been read.
         """
         msg = 1
         time_remaining = timeout

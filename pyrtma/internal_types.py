@@ -103,10 +103,12 @@ class Message:
         # Check header type match
         assert isinstance(header, self.header_cls)
 
+        msg_sz = header.size + header.num_data_bytes
+
         # Extend the buffer for the header and expected data if needed
-        if (self.size) > self._bufsz:
+        if (msg_sz) > self._bufsz:
             self._view.release()
-            self._buffer.extend(bytearray(self.size - self._bufsz))
+            self._buffer.extend(bytearray(msg_sz - self._bufsz))
 
             # Create view into the buffer
             self._view = memoryview(self._buffer)

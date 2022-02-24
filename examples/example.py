@@ -12,7 +12,7 @@ from pyrtma.client import Client
 # Create a user defined message from a ctypes.Structure or basic ctypes
 class USER_MESSAGE(ctypes.Structure):
     _fields_ = [
-        ("str", ctypes.c_byte * 16),
+        ("str", ctypes.c_byte * 64),
         ("val", ctypes.c_double),
         ("arr", ctypes.c_int * 8),
     ]
@@ -67,6 +67,7 @@ def subscriber(server="127.0.0.1:7111", timecode=False):
             if msg is not None:
                 if msg.msg_name == "USER_MESSAGE":
                     msg.hexdump()
+                    print(msg)
                 elif msg.msg_name == "Exit":
                     print("Goodbye.")
                     break

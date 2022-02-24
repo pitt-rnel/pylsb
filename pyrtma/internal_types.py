@@ -233,6 +233,12 @@ class Message:
         else:
             Message.header_cls = MessageHeader
             return MessageHeader
+    
+    def __repr__(self):
+        str = __msg_data_print__(self._header)
+        if self._header.num_data_bytes:
+            str += f"\n\tdata = {__msg_data_print__(self.data, 1)}"
+        return str
 
 
 class Connect(ctypes.Structure):
@@ -310,6 +316,7 @@ def AddMessage(msg_name, msg_type, msg_def=None, signal=False):
     mt_by_id[msg_type] = msg_name
 
     if not signal:
+        setattr(msg_def, "__repr__", __msg_data_print__)
         setattr(module, msg_name, msg_def)
     else:
         setattr(module, msg_name, MSG_TYPE)
@@ -317,3 +324,29 @@ def AddMessage(msg_name, msg_type, msg_def=None, signal=False):
 
 def AddSignal(msg_name, msg_type):
     AddMessage(msg_name, msg_type, msg_def=None, signal=True)
+
+# custom print for message data
+def __msg_data_print__(self, add_tabs = 0):
+    str = "\t"*add_tabs + f"{type(self).__name__}:"
+    for field_name, field_type in self._fields_:
+        val = getattr(self, field_name)
+        class_name = type(val).__name__
+        # expand arrays
+        if hasattr(val, "__len__"):
+            val = __c_arr_print__(val)
+        str += f"\n" + "\t"*(add_tabs+1) + f"{field_name} = ({class_name}){val}"
+    return str
+
+# expand c arrays to print
+def __c_arr_print__(arr):
+    max_len = 20
+    arr_len = len(arr)
+    str = "{"
+    for i in range(0, min(arr_len, max_len)):
+        str += f"{arr[i]}, "
+    if arr_len > max_len:
+        str += "...}"
+    else:
+        str = str[:-2] + "}"
+    return str
+

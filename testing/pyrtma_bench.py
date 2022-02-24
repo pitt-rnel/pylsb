@@ -98,11 +98,11 @@ def subscriber_loop(sub_id=0, num_msgs=100000, msg_size=128, server="127.0.0.1:7
 
     # Read Loop (Start clock after first TEST msg received)
     msg_count = 0
-    tic = 0.0
+    tic = 0
     toc = 0.0
     test_msg_size = msg_size + ctypes.sizeof(mod.header_cls)
     while msg_count < num_msgs:
-        msg = mod.read_message(timeout=-1)
+        msg = mod.read_message(timeout=0.100)
         if msg is not None:
             if msg.msg_name == "TEST":
                 if msg_count == 0:
@@ -112,6 +112,9 @@ def subscriber_loop(sub_id=0, num_msgs=100000, msg_size=128, server="127.0.0.1:7
                 msg_count += 1
             elif msg.msg_name == "Exit":
                 break
+        if tic and (time.perf_counter() - toc) > 1:
+            print(f"Subscriber [{sub_id:d}] breaking early.")
+            break
 
     mod.send_signal("SUBSCRIBER_DONE")
 

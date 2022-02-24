@@ -327,7 +327,7 @@ class Client(object):
             nbytes = 0
             while nbytes != msg.data_size:
                 nbytes += self._sock.recv_into(
-                    msg.data_buffer, min(4096, msg.data_size - nbytes)
+                    msg.data_buffer, min(65536, msg.data_size - nbytes)
                 )
 
         return msg

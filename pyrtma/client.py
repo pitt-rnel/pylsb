@@ -313,7 +313,9 @@ class Client(object):
             msg = Message(buffer=self._recv_buffer)
             nbytes = 0
             while nbytes < msg.header_size:
-                nbytes += self._sock.recv_into(msg.hdr_buffer, msg.header_size - nbytes)
+                nbytes += self._sock.recv_into(
+                    msg.hdr_buffer[nbytes:], msg.header_size - nbytes
+                )
 
             msg.header.recv_time = time.time()
         else:

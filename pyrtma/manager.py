@@ -228,17 +228,23 @@ class MessageManager:
 
         if nbytes != msg.header_size:
             mod = self.modules[sock]
+            self.logger.warning(
+                f"DROPPING - {mod!s} - No header returned from sock.recv_into."
+            )
             self.remove_module(mod)
             return None
 
         # Read Data Section
-        # TODO: This loop can hang
         if msg.data_size:
-            nbytes = 0
-            while nbytes < msg.data_size:
-                nbytes += sock.recv_into(
-                    msg.data_buffer[nbytes:], msg.data_size - nbytes
+            nbytes = sock.recv_into(msg.data_buffer, msg.data_size, socket.MSG_WAITALL)
+
+            if nbytes != msg.data_size:
+                mod = self.modules[sock]
+                self.logger.warning(
+                    f"DROPPING - {mod!s} - No data returned from sock.recv_into."
                 )
+                self.remove_module(mod)
+                return None
 
         return msg
 

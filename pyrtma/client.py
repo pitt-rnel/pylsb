@@ -8,7 +8,7 @@ import pyrtma.internal_types
 from pyrtma.internal_types import Message, MessageHeader
 from pyrtma.constants import *
 from functools import wraps
-from typing import List, Optional, Tuple, Type
+from typing import List, Optional, Tuple, Type, Union
 
 
 class ClientError(Exception):
@@ -300,7 +300,9 @@ class Client(object):
             raise ConnectionLost from e
 
     @requires_connection
-    def read_message(self, timeout=-1, ack=False) -> Optional[Message]:
+    def read_message(
+        self, timeout: Union[int, float] = -1, ack=False
+    ) -> Optional[Message]:
         if timeout >= 0:
             readfds, writefds, exceptfds = select.select([self._sock], [], [], timeout)
         else:
@@ -310,27 +312,45 @@ class Client(object):
 
         # Read RTMA Header Section
         if readfds:
-            msg = Message(buffer=self._recv_buffer)
-            nbytes = 0
-            while nbytes < msg.header_size:
-                nbytes += self._sock.recv_into(
-                    msg.hdr_buffer[nbytes:], msg.header_size - nbytes
+            msg = Message()
+            try:
+                nbytes = self._sock.recv_into(
+                    msg.hdr_buffer, msg.header_size, socket.MSG_WAITALL
                 )
+                """
+                Note:
+                MSG_WAITALL Flag:
+                The receive request will complete only when one of the following events occurs:
+                The buffer supplied by the caller is completely full.
+                The connection has been closed.
+                The request has been canceled or an error occurred.
+                """
 
-            msg.header.recv_time = time.time()
+                if nbytes != msg.header_size:
+                    self._connected = False
+                    raise ConnectionLost
+
+                msg.header.recv_time = time.time()
+            except ConnectionError:
+                raise ConnectionLost
         else:
             return None
 
+        # Add the name string to the msg
         msg.msg_name = pyrtma.internal_types.MT_BY_ID[msg.header.msg_type]
 
         # Read Data Section
-        # TODO: This loop can hang
         if msg.data_size:
-            nbytes = 0
-            while nbytes != msg.data_size:
-                nbytes += self._sock.recv_into(
-                    msg.data_buffer[nbytes:], min(65536, msg.data_size - nbytes)
+            try:
+                nbytes = self._sock.recv_into(
+                    msg.data_buffer, msg.data_size, socket.MSG_WAITALL
                 )
+
+                if nbytes != msg.data_size:
+                    self._connected = False
+                    raise ConnectionLost
+            except ConnectionError:
+                raise ConnectionLost
 
         return msg
 
@@ -379,4 +399,4 @@ class Client(object):
 
     def __str__(self) -> str:
         # TODO: Make this better.
-        return f"Client(server={self.server}, connected={self.connected}."
+        return f"Client(module_id={self.module_id}, server={self.server}, connected={self.connected}."

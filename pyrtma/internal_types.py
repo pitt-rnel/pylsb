@@ -126,11 +126,16 @@ class Message:
 
         # Extend the buffer for the header and expected data if needed
         if (msg_sz) > self._bufsz:
+            # Remove current header reference from view
+            del header
+
             self._view.release()
             self._buffer.extend(bytearray((msg_sz) - self._bufsz))
-
             # Create view into the buffer
             self._view = memoryview(self._buffer)
+
+            # Create header from new view
+            header = Message.header_cls.from_buffer(self._view[: self.header_size])
 
         self._header = header
 

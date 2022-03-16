@@ -10,7 +10,7 @@ import os
 import pyrtma.internal_types
 import pyrtma.constants
 
-from pyrtma.internal_types import Message, MessageHeader
+from pyrtma.internal_types import Message, MessageHeader, RTMA
 
 from typing import Dict, List, Tuple, Set, Type, Union, Optional
 from dataclasses import dataclass
@@ -34,7 +34,7 @@ class Module:
     def send_ack(self):
         # Just send a header
         header = self.header_cls()
-        header.msg_type = pyrtma.internal_types.MT["Acknowledge"]
+        header.msg_type = RTMA.MT["Acknowledge"]
         header.send_time = time.time()
         header.src_mod_id = pyrtma.constants.MID_MESSAGE_MANAGER
         header.dest_mod_id = self.id
@@ -329,7 +329,7 @@ class MessageManager:
         # src_module.send_ack()
 
         header = self.header_cls()
-        header.msg_type = pyrtma.internal_types.MT["Acknowledge"]
+        header.msg_type = RTMA.MT["Acknowledge"]
         header.send_time = time.time()
         header.src_mod_id = pyrtma.constants.MID_MESSAGE_MANAGER
         header.dest_mod_id = src_module.id
@@ -357,7 +357,7 @@ class MessageManager:
         header = self.header_cls()
         data = pyrtma.internal_types.FailedMessage()
 
-        header.msg_type = pyrtma.internal_types.MT["FailedMessage"]
+        header.msg_type = RTMA.MT["FailedMessage"]
         header.send_time = time.time()
         header.src_mod_id = pyrtma.constants.MID_MESSAGE_MANAGER
         header.num_data_bytes = ctypes.sizeof(data)
@@ -369,8 +369,7 @@ class MessageManager:
         failed_msg = Message(header, data, buffer=self._buffer)
 
         if (
-            failed_msg.data.msg_header.msg_type
-            == pyrtma.internal_types.MT["FailedMessage"]
+            failed_msg.data.msg_header.msg_type == RTMA.MT["FailedMessage"]
         ):  # avoid unlikely infinite recursion
             return
 
@@ -385,7 +384,7 @@ class MessageManager:
         header = self.header_cls()
         data = pyrtma.internal_types.TimingMessage()
 
-        header.msg_type = pyrtma.internal_types.MT["TimingMessage"]
+        header.msg_type = RTMA.MT["TimingMessage"]
         header.send_time = time.time()
         header.src_mod_id = pyrtma.constants.MID_MESSAGE_MANAGER
         header.num_data_bytes = ctypes.sizeof(data)
@@ -405,7 +404,7 @@ class MessageManager:
     def process_message(
         self, src_module: Module, msg: Message, wlist: List[socket.socket]
     ):
-        msg_name = pyrtma.internal_types.MT_BY_ID.get(msg.header.msg_type)
+        msg_name = RTMA.MT_BY_ID.get(msg.header.msg_type)
 
         if msg_name == "Connect":
             if self.connect_module(src_module, msg):

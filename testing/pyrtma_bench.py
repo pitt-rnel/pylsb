@@ -5,8 +5,7 @@ import multiprocessing
 
 sys.path.append("../")
 
-import pyrtma.internal_types
-from pyrtma.client import Client
+from pyrtma import *
 
 
 def publisher_loop(
@@ -14,15 +13,13 @@ def publisher_loop(
 ):
     # Register user defined message types
     if msg_size > 0:
-        pyrtma.internal_types.AddMessage(
-            msg_name="TEST", msg_type=5000, msg_def=create_test_msg(msg_size)
-        )
+        AddMessage(msg_name="TEST", msg_type=5000, msg_def=create_test_msg(msg_size))
     else:
-        pyrtma.internal_types.AddSignal(msg_name="TEST", msg_type=5000)
+        AddSignal(msg_name="TEST", msg_type=5000)
 
-    pyrtma.internal_types.AddSignal(msg_name="PUBLISHER_READY", msg_type=5001)
-    pyrtma.internal_types.AddSignal(msg_name="PUBLISHER_DONE", msg_type=5002)
-    pyrtma.internal_types.AddSignal(msg_name="SUBSCRIBER_READY", msg_type=5003)
+    AddSignal(msg_name="PUBLISHER_READY", msg_type=5001)
+    AddSignal(msg_name="PUBLISHER_DONE", msg_type=5002)
+    AddSignal(msg_name="SUBSCRIBER_READY", msg_type=5003)
 
     # Setup Client
     mod = Client()
@@ -78,14 +75,12 @@ def publisher_loop(
 def subscriber_loop(sub_id=0, num_msgs=100000, msg_size=128, server="127.0.0.1:7111"):
     # Register user defined message types
     if msg_size > 0:
-        pyrtma.internal_types.AddMessage(
-            msg_name="TEST", msg_type=5000, msg_def=create_test_msg(msg_size)
-        )
+        AddMessage(msg_name="TEST", msg_type=5000, msg_def=create_test_msg(msg_size))
     else:
-        pyrtma.internal_types.AddSignal(msg_name="TEST", msg_type=5000)
+        AddSignal(msg_name="TEST", msg_type=5000)
 
-    pyrtma.internal_types.AddSignal(msg_name="SUBSCRIBER_READY", msg_type=5003)
-    pyrtma.internal_types.AddSignal(msg_name="SUBSCRIBER_DONE", msg_type=5004)
+    AddSignal(msg_name="SUBSCRIBER_READY", msg_type=5003)
+    AddSignal(msg_name="SUBSCRIBER_DONE", msg_type=5004)
 
     # Setup Client
     mod = Client()
@@ -182,10 +177,10 @@ if __name__ == "__main__":
     mod.connect(server_name=args.server)
     mod.send_module_ready()
 
-    pyrtma.internal_types.AddSignal(msg_name="PUBLISHER_READY", msg_type=5001)
-    pyrtma.internal_types.AddSignal(msg_name="PUBLISHER_DONE", msg_type=5002)
-    pyrtma.internal_types.AddSignal(msg_name="SUBSCRIBER_READY", msg_type=5003)
-    pyrtma.internal_types.AddSignal(msg_name="SUBSCRIBER_DONE", msg_type=5004)
+    AddSignal(msg_name="PUBLISHER_READY", msg_type=5001)
+    AddSignal(msg_name="PUBLISHER_DONE", msg_type=5002)
+    AddSignal(msg_name="SUBSCRIBER_READY", msg_type=5003)
+    AddSignal(msg_name="SUBSCRIBER_DONE", msg_type=5004)
 
     mod.subscribe("PUBLISHER_READY")
     mod.subscribe("PUBLISHER_DONE")

@@ -6,7 +6,6 @@ import ctypes
 
 import pyrtma.internal_types
 from pyrtma.internal_types import Message, MessageHeader, RTMA
-from pyrtma.constants import *
 from functools import wraps
 from typing import List, Optional, Tuple, Type, Union
 

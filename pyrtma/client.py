@@ -212,10 +212,10 @@ class Client(object):
     ):
 
         # Verify that the module & host ids are valid
-        if dest_mod_id < 0 or dest_mod_id > MAX_MODULES:
+        if dest_mod_id < 0 or dest_mod_id > RTMA.constants.MAX_MODULES:
             raise InvalidDestinationModule(f"Invalid dest_mod_id  of [{dest_mod_id}]")
 
-        if dest_host_id < 0 or dest_host_id > MAX_HOSTS:
+        if dest_host_id < 0 or dest_host_id > RTMA.constants.MAX_HOSTS:
             raise InvalidDestinationHost(f"Invalid dest_host_id of [{dest_host_id}]")
 
         # Assume that msg_type, num_data_bytes, data - have been filled in
@@ -255,10 +255,10 @@ class Client(object):
         timeout: float = -1,
     ):
         # Verify that the module & host ids are valid
-        if dest_mod_id < 0 or dest_mod_id > MAX_MODULES:
+        if dest_mod_id < 0 or dest_mod_id > RTMA.constants.MAX_MODULES:
             raise InvalidDestinationModule(f"Invalid dest_mod_id of [{dest_mod_id}]")
 
-        if dest_host_id < 0 or dest_host_id > MAX_HOSTS:
+        if dest_host_id < 0 or dest_host_id > RTMA.constants.MAX_HOSTS:
             raise InvalidDestinationHost(f"Invalid dest_host_id of [{dest_host_id}]")
 
         # Assume that msg_type, num_data_bytes, data - have been filled in

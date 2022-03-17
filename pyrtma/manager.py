@@ -34,7 +34,7 @@ class Module:
         header = self.header_cls()
         header.msg_type = RTMA.MT["Acknowledge"]
         header.send_time = time.time()
-        header.src_mod_id = pyrtma.constants.MID_MESSAGE_MANAGER
+        header.src_mod_id = RTMA.constants.MID_MESSAGE_MANAGER
         header.dest_mod_id = self.id
         header.num_data_bytes = 0
 
@@ -140,10 +140,10 @@ class MessageManager:
     def assign_module_id(self):
         current_ids = [mod.id for mod in self.modules.values()]
 
-        MAX_DYN_IDS = pyrtma.constants.MAX_MODULES - pyrtma.constants.DYN_MOD_ID_START
+        MAX_DYN_IDS = RTMA.constants.MAX_MODULES - RTMA.constants.DYN_MOD_ID_START
         for i in range(0, MAX_DYN_IDS):
 
-            mod_id = self.next_dynamic_mod_id_offset + pyrtma.constants.DYN_MOD_ID_START
+            mod_id = self.next_dynamic_mod_id_offset + RTMA.constants.DYN_MOD_ID_START
             self.next_dynamic_mod_id_offset += 1
             if self.next_dynamic_mod_id_offset == MAX_DYN_IDS:
                 self.next_dynamic_mod_id_offset = 0
@@ -258,12 +258,12 @@ class MessageManager:
         dest_host_id = msg.header.dest_host_id
 
         # Verify that the module & host ids are valid
-        if dest_mod_id < 0 or dest_mod_id > pyrtma.constants.MAX_MODULES:
+        if dest_mod_id < 0 or dest_mod_id > RTMA.constants.MAX_MODULES:
             self.logger.error(
                 f"MessageManager::forward_message: Got invalid dest_mod_id [{dest_mod_id}]"
             )
 
-        if dest_host_id < 0 or dest_host_id > pyrtma.constants.MAX_HOSTS:
+        if dest_host_id < 0 or dest_host_id > RTMA.constants.MAX_HOSTS:
             self.logger.error(
                 f"MessageManager::forward_message: Got invalid dest_host_id [{dest_host_id}]"
             )
@@ -329,7 +329,7 @@ class MessageManager:
         header = self.header_cls()
         header.msg_type = RTMA.MT["Acknowledge"]
         header.send_time = time.time()
-        header.src_mod_id = pyrtma.constants.MID_MESSAGE_MANAGER
+        header.src_mod_id = RTMA.constants.MID_MESSAGE_MANAGER
         header.dest_mod_id = src_module.id
         header.num_data_bytes = 0
 
@@ -357,7 +357,7 @@ class MessageManager:
 
         header.msg_type = RTMA.MT["FailedMessage"]
         header.send_time = time.time()
-        header.src_mod_id = pyrtma.constants.MID_MESSAGE_MANAGER
+        header.src_mod_id = RTMA.constants.MID_MESSAGE_MANAGER
         header.num_data_bytes = ctypes.sizeof(data)
 
         data.dest_mod_id = dest_module.id
@@ -384,7 +384,7 @@ class MessageManager:
 
         header.msg_type = RTMA.MT["TimingMessage"]
         header.send_time = time.time()
-        header.src_mod_id = pyrtma.constants.MID_MESSAGE_MANAGER
+        header.src_mod_id = RTMA.constants.MID_MESSAGE_MANAGER
         header.num_data_bytes = ctypes.sizeof(data)
 
         tmsg = Message(header, data, buffer=self._buffer)

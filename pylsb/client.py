@@ -4,8 +4,8 @@ import time
 import os
 import ctypes
 
-import pyrtma.internal_types
-from pyrtma.internal_types import Message, MessageHeader, RTMA
+import pylsb.internal_types
+from pylsb.internal_types import Message, MessageHeader, LSB
 from functools import wraps
 from typing import List, Optional, Tuple, Type, Union
 
@@ -111,7 +111,7 @@ class Client(object):
 
         self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
-        msg = pyrtma.internal_types.Connect()
+        msg = pylsb.internal_types.Connect()
         msg.logger_status = int(logger_status)
         msg.daemon_status = int(daemon_status)
 
@@ -163,7 +163,7 @@ class Client(object):
 
     @requires_connection
     def send_module_ready(self):
-        msg = pyrtma.internal_types.ModuleReady()
+        msg = pylsb.internal_types.ModuleReady()
         msg.pid = os.getpid()
         self.send_message(msg)
 
@@ -172,18 +172,18 @@ class Client(object):
             msg_list = [msg_list]
 
         if ctrl_msg == "Subscribe":
-            msg = pyrtma.internal_types.Subscribe()
+            msg = pylsb.internal_types.Subscribe()
         elif ctrl_msg == "Unsubscribe":
-            msg = pyrtma.internal_types.Subscribe()
+            msg = pylsb.internal_types.Subscribe()
         elif ctrl_msg == "PauseSubscription":
-            msg = pyrtma.internal_types.PauseSubscription()
+            msg = pylsb.internal_types.PauseSubscription()
         elif ctrl_msg == "ResumeSubscription":
-            msg = pyrtma.internal_types.ResumeSubscription()
+            msg = pylsb.internal_types.ResumeSubscription()
         else:
             raise TypeError("Unknown control message type.")
 
         for msg_name in msg_list:
-            msg.msg_type = RTMA.MT[msg_name]
+            msg.msg_type = LSB.MT[msg_name]
             self.send_message(msg)
 
     @requires_connection
@@ -212,15 +212,15 @@ class Client(object):
     ):
 
         # Verify that the module & host ids are valid
-        if dest_mod_id < 0 or dest_mod_id > RTMA.constants.MAX_MODULES:
+        if dest_mod_id < 0 or dest_mod_id > LSB.constants.MAX_MODULES:
             raise InvalidDestinationModule(f"Invalid dest_mod_id  of [{dest_mod_id}]")
 
-        if dest_host_id < 0 or dest_host_id > RTMA.constants.MAX_HOSTS:
+        if dest_host_id < 0 or dest_host_id > LSB.constants.MAX_HOSTS:
             raise InvalidDestinationHost(f"Invalid dest_host_id of [{dest_host_id}]")
 
         # Assume that msg_type, num_data_bytes, data - have been filled in
         header = self._header_cls()
-        header.msg_type = RTMA.MT[signal_name]
+        header.msg_type = LSB.MT[signal_name]
         header.msg_count = self._msg_count
         header.send_time = time.time()
         header.recv_time = 0.0
@@ -255,15 +255,15 @@ class Client(object):
         timeout: float = -1,
     ):
         # Verify that the module & host ids are valid
-        if dest_mod_id < 0 or dest_mod_id > RTMA.constants.MAX_MODULES:
+        if dest_mod_id < 0 or dest_mod_id > LSB.constants.MAX_MODULES:
             raise InvalidDestinationModule(f"Invalid dest_mod_id of [{dest_mod_id}]")
 
-        if dest_host_id < 0 or dest_host_id > RTMA.constants.MAX_HOSTS:
+        if dest_host_id < 0 or dest_host_id > LSB.constants.MAX_HOSTS:
             raise InvalidDestinationHost(f"Invalid dest_host_id of [{dest_host_id}]")
 
         # Assume that msg_type, num_data_bytes, data - have been filled in
         header = self._header_cls()
-        header.msg_type = RTMA.MT[msg_data.__class__.__name__]
+        header.msg_type = LSB.MT[msg_data.__class__.__name__]
         header.msg_count = self._msg_count
         header.send_time = time.time()
         header.recv_time = 0.0
@@ -309,7 +309,7 @@ class Client(object):
                 [self._sock], [], []
             )  # blocking
 
-        # Read RTMA Header Section
+        # Read LSB Header Section
         if readfds:
             msg = Message()
             try:
@@ -336,7 +336,7 @@ class Client(object):
             return None
 
         # Add the name string to the msg
-        msg.msg_name = RTMA.MT_BY_ID[msg.header.msg_type]
+        msg.msg_name = LSB.MT_BY_ID[msg.header.msg_type]
 
         # Read Data Section
         if msg.data_size:
@@ -361,7 +361,7 @@ class Client(object):
             while True:
                 msg = self.read_message(ack=True)
                 if msg is not None:
-                    if msg.header.msg_type == RTMA.MT["Acknowledge"]:
+                    if msg.header.msg_type == LSB.MT["Acknowledge"]:
                         break
             return msg
         else:
@@ -371,7 +371,7 @@ class Client(object):
             while time_remaining > 0:
                 msg = self.read_message(timeout=time_remaining, ack=True)
                 if msg is not None:
-                    if msg.header.msg_type == RTMA.MT["Acknowledge"]:
+                    if msg.header.msg_type == LSB.MT["Acknowledge"]:
                         return msg
 
                 time_now = time.perf_counter()

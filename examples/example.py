@@ -3,7 +3,7 @@ import ctypes
 
 sys.path.append("../")
 
-from pyrtma import *
+from pylsb import *
 
 # Create a user defined message from a ctypes.Structure or basic ctypes
 class USER_MESSAGE(ctypes.Structure):
@@ -17,8 +17,8 @@ class USER_MESSAGE(ctypes.Structure):
 # Choose a unique message type id number
 MT_USER_MESSAGE = 1234
 
-# Add the message definition to pyrtma.core module internal dictionary
-pyrtma.internal_types.AddMessage(
+# Add the message definition to pylsb.core module internal dictionary
+pylsb.internal_types.AddMessage(
     msg_name="USER_MESSAGE", msg_type=MT_USER_MESSAGE, msg_def=USER_MESSAGE
 )
 
@@ -76,7 +76,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--server", default="127.0.0.1:7111", help="RTMA Message Manager ip address."
+        "--server", default="127.0.0.1:7111", help="LSB Message Manager ip address."
     )
     parser.add_argument(
         "-t", "--timecode", action="store_true", help="Use timecode in message header"
@@ -92,10 +92,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.pub:
-        print("pyrtma Publisher")
+        print("pylsb Publisher")
         publisher(args.server, timecode=args.timecode)
     elif args.sub:
-        print("pyrtma Subscriber")
+        print("pylsb Subscriber")
         subscriber(args.server, timecode=args.timecode)
     else:
         print("Unknown input")

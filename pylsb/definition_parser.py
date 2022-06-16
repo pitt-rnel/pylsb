@@ -3,7 +3,7 @@ import ctypes
 import ast
 from typing import List
 from collections import defaultdict
-from .internal_types import RTMA, __msg_data_print__
+from .internal_types import LSB, __msg_data_print__
 
 
 type_map = {
@@ -34,7 +34,7 @@ def camelcase(name):
 
 
 def expand(token: str, defines):
-    return defines["constants"].get(token) or RTMA.constants.get(token) or token
+    return defines["constants"].get(token) or LSB.constants.get(token) or token
 
 
 def expand_expression(expression: str, defines):
@@ -157,7 +157,7 @@ def get_type(type_spec, typedefs, msg_defs):
     if t:
         return t
 
-    t = RTMA.msg_defs.get(camelcase(type_spec))
+    t = LSB.msg_defs.get(camelcase(type_spec))
     if t:
         return t
 
@@ -173,7 +173,7 @@ def get_type(type_spec, typedefs, msg_defs):
         if t:
             return t
 
-        t = RTMA.msg_defs.get(camelcase(type_spec))
+        t = LSB.msg_defs.get(camelcase(type_spec))
         if t:
             return t
 
@@ -244,12 +244,12 @@ def parse_file(filename):
     msg_defs = create_ctypes(defines, typedefs, structs)
 
     # Only update the module after we are done parsing
-    RTMA.MT.update(defines["MT"])
-    RTMA.MID.update(defines["MID"])
-    RTMA.constants.update(defines["constants"])
-    RTMA.typedefs.update(typedefs)
-    RTMA.structs.update(structs)
-    RTMA.msg_defs.update(msg_defs)
+    LSB.MT.update(defines["MT"])
+    LSB.MID.update(defines["MID"])
+    LSB.constants.update(defines["constants"])
+    LSB.typedefs.update(typedefs)
+    LSB.structs.update(structs)
+    LSB.msg_defs.update(msg_defs)
 
     for msg_name, msg_def in msg_defs.items():
         setattr(msg_def, "__repr__", __msg_data_print__)

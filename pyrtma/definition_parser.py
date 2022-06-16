@@ -221,9 +221,9 @@ def create_ctypes(defines, typedefs, structs):
 
 def parse_file(filename):
     """Parse a C header file for message definitions.
-        Notes:
-            * Does not follow other #includes
-            * Parsing order: #defines, typedefs, typedef struct
+    Notes:
+        * Does not follow other #includes
+        * Parsing order: #defines, typedefs, typedef struct
     """
 
     with open(filename, "r") as f:

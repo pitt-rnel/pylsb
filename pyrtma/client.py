@@ -3,10 +3,9 @@ import select
 import time
 import os
 import ctypes
-import pyrtma.internal_types
 
-from pyrtma.internal_types import Message, MessageHeader
-from pyrtma.constants import *
+import pyrtma.internal_types
+from pyrtma.internal_types import Message, MessageHeader, RTMA
 from functools import wraps
 from typing import List, Optional, Tuple, Type, Union
 
@@ -184,7 +183,7 @@ class Client(object):
             raise TypeError("Unknown control message type.")
 
         for msg_name in msg_list:
-            msg.msg_type = pyrtma.internal_types.MT[msg_name]
+            msg.msg_type = RTMA.MT[msg_name]
             self.send_message(msg)
 
     @requires_connection
@@ -213,15 +212,15 @@ class Client(object):
     ):
 
         # Verify that the module & host ids are valid
-        if dest_mod_id < 0 or dest_mod_id > MAX_MODULES:
+        if dest_mod_id < 0 or dest_mod_id > RTMA.constants.MAX_MODULES:
             raise InvalidDestinationModule(f"Invalid dest_mod_id  of [{dest_mod_id}]")
 
-        if dest_host_id < 0 or dest_host_id > MAX_HOSTS:
+        if dest_host_id < 0 or dest_host_id > RTMA.constants.MAX_HOSTS:
             raise InvalidDestinationHost(f"Invalid dest_host_id of [{dest_host_id}]")
 
         # Assume that msg_type, num_data_bytes, data - have been filled in
         header = self._header_cls()
-        header.msg_type = pyrtma.internal_types.MT[signal_name]
+        header.msg_type = RTMA.MT[signal_name]
         header.msg_count = self._msg_count
         header.send_time = time.time()
         header.recv_time = 0.0
@@ -256,15 +255,15 @@ class Client(object):
         timeout: float = -1,
     ):
         # Verify that the module & host ids are valid
-        if dest_mod_id < 0 or dest_mod_id > MAX_MODULES:
+        if dest_mod_id < 0 or dest_mod_id > RTMA.constants.MAX_MODULES:
             raise InvalidDestinationModule(f"Invalid dest_mod_id of [{dest_mod_id}]")
 
-        if dest_host_id < 0 or dest_host_id > MAX_HOSTS:
+        if dest_host_id < 0 or dest_host_id > RTMA.constants.MAX_HOSTS:
             raise InvalidDestinationHost(f"Invalid dest_host_id of [{dest_host_id}]")
 
         # Assume that msg_type, num_data_bytes, data - have been filled in
         header = self._header_cls()
-        header.msg_type = pyrtma.internal_types.MT[msg_data.__class__.__name__]
+        header.msg_type = RTMA.MT[msg_data.__class__.__name__]
         header.msg_count = self._msg_count
         header.send_time = time.time()
         header.recv_time = 0.0
@@ -337,7 +336,7 @@ class Client(object):
             return None
 
         # Add the name string to the msg
-        msg.msg_name = pyrtma.internal_types.MT_BY_ID[msg.header.msg_type]
+        msg.msg_name = RTMA.MT_BY_ID[msg.header.msg_type]
 
         # Read Data Section
         if msg.data_size:
@@ -362,7 +361,7 @@ class Client(object):
             while True:
                 msg = self.read_message(ack=True)
                 if msg is not None:
-                    if msg.header.msg_type == pyrtma.internal_types.MT["Acknowledge"]:
+                    if msg.header.msg_type == RTMA.MT["Acknowledge"]:
                         break
             return msg
         else:
@@ -372,7 +371,7 @@ class Client(object):
             while time_remaining > 0:
                 msg = self.read_message(timeout=time_remaining, ack=True)
                 if msg is not None:
-                    if msg.header.msg_type == pyrtma.internal_types.MT["Acknowledge"]:
+                    if msg.header.msg_type == RTMA.MT["Acknowledge"]:
                         return msg
 
                 time_now = time.perf_counter()

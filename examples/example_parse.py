@@ -1,26 +1,18 @@
 import sys
-import ctypes
+import time
 
 sys.path.append("../")
 
 from pyrtma import *
 
-# Create a user defined message from a ctypes.Structure or basic ctypes
-class USER_MESSAGE(ctypes.Structure):
-    _fields_ = [
-        ("str", ctypes.c_byte * 64),
-        ("val", ctypes.c_double),
-        ("arr", ctypes.c_int * 8),
-    ]
+# Order of included files is important
+include_files = [
+    "../testing/mjvr_types.h",
+    "../testing/climber_config.h",
+]
 
-
-# Choose a unique message type id number
-MT_USER_MESSAGE = 1234
-
-# Add the message definition to pyrtma.core module internal dictionary
-pyrtma.internal_types.AddMessage(
-    msg_name="USER_MESSAGE", msg_type=MT_USER_MESSAGE, msg_def=USER_MESSAGE
-)
+# Parse the C header files with message definitions.
+parse_files(include_files)
 
 
 def publisher(server="127.0.0.1:7111", timecode=False):
@@ -28,23 +20,16 @@ def publisher(server="127.0.0.1:7111", timecode=False):
     mod = Client(timecode=timecode)
     mod.connect(server_name=server)
 
-    # Build a packet to send
-    msg = USER_MESSAGE()
-    py_string = b"Hello World"
-    msg.str[: len(py_string)] = py_string
-    msg.val = 123.456
-    msg.arr[:] = list(range(8))
+    for name, msg in RTMA.msg_defs.items():
+        mt = RTMA.MT.get(name)
+        if not mt or mt < 1000:
+            continue
+        print(name)
+        mod.send_message(msg())
+        time.sleep(0.100)
 
-    while True:
-        c = input("Hit enter to publish a message. (Q)uit.")
-
-        if c not in ["Q", "q"]:
-            mod.send_message(msg)
-            print("Sent a packet")
-        else:
-            mod.send_signal("Exit")
-            print("Goodbye")
-            break
+    mod.send_signal("Exit")
+    print("Goodbye")
 
 
 def subscriber(server="127.0.0.1:7111", timecode=False):
@@ -53,7 +38,11 @@ def subscriber(server="127.0.0.1:7111", timecode=False):
     mod.connect(server_name=server)
 
     # Select the messages to receive
-    mod.subscribe(["USER_MESSAGE", "Exit"])
+    mts = RTMA.MT.values()
+    for mt in mts:
+        if mt > 1000:
+            mod.subscribe([RTMA.MT_BY_ID[mt]])
+    mod.subscribe(["Exit"])
 
     print("Waiting for packets...")
     while True:
@@ -61,10 +50,9 @@ def subscriber(server="127.0.0.1:7111", timecode=False):
             msg = mod.read_message(timeout=0.200)
 
             if msg is not None:
-                if msg.msg_name == "USER_MESSAGE":
-                    msg.hexdump()
-                    print(msg)
-                elif msg.msg_name == "Exit":
+                # msg.hexdump()
+                print(msg)
+                if msg.msg_name == "Exit":
                     print("Goodbye.")
                     break
         except KeyboardInterrupt:

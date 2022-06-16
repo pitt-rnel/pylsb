@@ -1,33 +1,79 @@
 import ctypes
 import sys
-from typing import Type, Any, Optional, ClassVar
-from .constants import *
+from typing import Type, Any, Optional, ClassVar, Dict, Union
+from dataclasses import dataclass, field
 
 module = sys.modules["pyrtma.internal_types"]
 
-# RTMA INTERNAL MESSAGE TYPES
 
-MT = {}
-MT["Exit"] = 0
-MT["Kill"] = 1
-MT["Acknowledge"] = 2
-MT["FailSubscribe"] = 6
-MT["FailedMessage"] = 8
-MT["Connect"] = 13
-MT["Disconnect"] = 14
-MT["Subscribe"] = 15
-MT["Unsubscribe"] = 16
-MT["PauseSubscription"] = 85
-MT["ResumeSubscription"] = 86
-MT["SaveMessageLog"] = 56
-MT["MessageLogSaved"] = 57
-MT["PauseMessageLogging"] = 58
-MT["ResumeMessageLogging"] = 59
-MT["ResetMessageLog"] = 60
-MT["DumpMessageLog"] = 61
-MT["ForceDisconnect"] = 82
-MT["ModuleReady"] = 26
-MT["TimingMessage"] = 80
+class AttributeDict(dict):
+    def __getattr__(self, attr):
+        return self[attr]
+
+    def __setattr__(self, attr, value):
+        self[attr] = value
+
+
+# RTMA INTERNAL MESSAGE TYPES
+@dataclass
+class _RTMA:
+    defines: Dict[str, Any] = field(default_factory=AttributeDict)
+    typedefs: Dict[str, Any] = field(default_factory=AttributeDict)
+    structs: Dict[str, Any] = field(default_factory=AttributeDict)
+    constants: Dict[str, Union[int, float, str]] = field(default_factory=AttributeDict)
+    msg_defs: Dict[str, Any] = field(default_factory=AttributeDict)
+    MID: Dict[str, int] = field(default_factory=AttributeDict)
+    MT: Dict[str, int] = field(default_factory=AttributeDict)
+
+    @property
+    def MT_BY_ID(self) -> Dict[int, str]:
+        return {v: k for k, v in self.MT.items()}
+
+
+# Store all the context of our session here
+RTMA = _RTMA()
+
+RTMA.MT["Exit"] = 0
+RTMA.MT["Kill"] = 1
+RTMA.MT["Acknowledge"] = 2
+RTMA.MT["FailSubscribe"] = 6
+RTMA.MT["FailedMessage"] = 8
+RTMA.MT["Connect"] = 13
+RTMA.MT["Disconnect"] = 14
+RTMA.MT["Subscribe"] = 15
+RTMA.MT["Unsubscribe"] = 16
+RTMA.MT["PauseSubscription"] = 85
+RTMA.MT["ResumeSubscription"] = 86
+RTMA.MT["SaveMessageLog"] = 56
+RTMA.MT["MessageLogSaved"] = 57
+RTMA.MT["PauseMessageLogging"] = 58
+RTMA.MT["ResumeMessageLogging"] = 59
+RTMA.MT["ResetMessageLog"] = 60
+RTMA.MT["DumpMessageLog"] = 61
+RTMA.MT["ForceDisconnect"] = 82
+RTMA.MT["ModuleReady"] = 26
+RTMA.MT["TimingMessage"] = 80
+
+RTMA.constants["MAX_MODULES"] = 200
+RTMA.constants["DYN_MOD_ID_START"] = 100
+RTMA.constants["MAX_HOSTS"] = 5
+RTMA.constants["MAX_MESSAGE_TYPES"] = 10000
+RTMA.constants["MIN_STREAM_TYPE"] = 9000
+RTMA.constants["MAX_TIMERS"] = 100
+RTMA.constants["MAX_INTERNAL_TIMERS"] = 20
+RTMA.constants["MAX_RTMA_MSG_TYPE"] = 99
+RTMA.constants["MAX_RTMA_MODULE_ID"] = 9
+RTMA.constants["MAX_LOGGER_FILENAME_LENGTH"] = 256
+RTMA.constants["MAX_CONTIGUOUS_MESSAGE_DATA"] = 9000
+RTMA.constants["MID_MESSAGE_MANAGER"] = 0
+RTMA.constants["MID_COMMAND_MODULE"] = 1
+RTMA.constants["MID_APPLICATION_MODULE"] = 2
+RTMA.constants["MID_NETWORK_RELAY"] = 3
+RTMA.constants["MID_STATUS_MODULE"] = 4
+RTMA.constants["MID_QUICKLOGGER"] = 5
+RTMA.constants["HID_LOCAL_HOST"] = 0
+RTMA.constants["HID_ALL_HOSTS"] = 0x7FFF
+RTMA.constants["ALL_MESSAGE_TYPES"] = 0x7FFFFFFF
 
 # START OF RTMA INTERNAL MESSAGE DEFINITIONS
 
@@ -35,6 +81,11 @@ MODULE_ID = ctypes.c_short
 HOST_ID = ctypes.c_short
 MSG_TYPE = ctypes.c_int
 MSG_COUNT = ctypes.c_int
+
+RTMA.typedefs["MODULE_ID"] = "short"
+RTMA.typedefs["HOST_ID"] = "short"
+RTMA.typedefs["MSG_TYPE"] = "int"
+RTMA.typedefs["MSG_COUNT"] = "int"
 
 
 class MessageHeader(ctypes.Structure):
@@ -148,8 +199,8 @@ class Message:
 
     def unpack(self, format=None) -> Any:
         # TODO: Should support other unpacking formats
-        msg_name = MT_BY_ID[self._header.msg_type]
-        data = getattr(module, msg_name).from_buffer(self._data_view)
+        msg_name = RTMA.MT_BY_ID[self._header.msg_type]
+        data = RTMA.msg_defs[msg_name].from_buffer(self._data_view)
         self._data = data
         self._data_set = True
         return data
@@ -295,38 +346,42 @@ class ModuleReady(ctypes.Structure):
 
 class SaveMessageLog(ctypes.Structure):
     _fields_ = [
-        ("pathname", ctypes.c_char * MAX_LOGGER_FILENAME_LENGTH),
+        ("pathname", ctypes.c_char * RTMA.constants.MAX_LOGGER_FILENAME_LENGTH),
         ("pathname_length", ctypes.c_int),
     ]
 
 
 class TimingMessage(ctypes.Structure):
     _fields_ = [
-        ("timing", ctypes.c_ushort * MAX_MESSAGE_TYPES),
-        ("ModulePID", ctypes.c_int * MAX_MODULES),
+        ("timing", ctypes.c_ushort * RTMA.constants.MAX_MESSAGE_TYPES),
+        ("ModulePID", ctypes.c_int * RTMA.constants.MAX_MODULES),
         ("send_time", ctypes.c_double),
     ]
 
 
-# END OF RTMA INTERNAL MESSAGE DEFINTIONS
+RTMA.msg_defs.Connect = Connect
+RTMA.msg_defs.Unsubscribe = Unsubscribe
+RTMA.msg_defs.Subscribe = Subscribe
+RTMA.msg_defs.PauseSubscription = PauseSubscription
+RTMA.msg_defs.ResumeSubscription = ResumeSubscription
+RTMA.msg_defs.FailedMessage = FailedMessage
+RTMA.msg_defs.ForceDisconnect = ForceDisconnect
+RTMA.msg_defs.ModuleReady = ModuleReady
+RTMA.msg_defs.SaveMessageLog = SaveMessageLog
+RTMA.msg_defs.TimingMessage = TimingMessage
 
-# Dictionary to lookup message name by message type id number
-# This needs come after all the message defintions are defined
-MT_BY_ID = {v: k for k, v in MT.items()}
+# END OF RTMA INTERNAL MESSAGE DEFINTIONS
 
 
 def AddMessage(msg_name, msg_type, msg_def=None, signal=False):
     """Add a user message definition to the rtma module"""
-    mt = getattr(module, "MT")
-    mt[msg_name] = msg_type
-    mt_by_id = getattr(module, "MT_BY_ID")
-    mt_by_id[msg_type] = msg_name
+    RTMA.MT[msg_name] = msg_type
 
     if not signal:
         setattr(msg_def, "__repr__", __msg_data_print__)
-        setattr(module, msg_name, msg_def)
+        setattr(RTMA.msg_defs, msg_name, msg_def)
     else:
-        setattr(module, msg_name, MSG_TYPE)
+        setattr(RTMA.msg_defs, msg_name, MSG_TYPE)
 
 
 def AddSignal(msg_name, msg_type):

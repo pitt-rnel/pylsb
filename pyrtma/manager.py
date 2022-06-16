@@ -8,9 +8,7 @@ import ctypes
 import os
 
 import pyrtma.internal_types
-import pyrtma.constants
-
-from pyrtma.internal_types import Message, MessageHeader
+from pyrtma.internal_types import Message, MessageHeader, RTMA
 
 from typing import Dict, List, Tuple, Set, Type, Union, Optional
 from dataclasses import dataclass
@@ -34,9 +32,9 @@ class Module:
     def send_ack(self):
         # Just send a header
         header = self.header_cls()
-        header.msg_type = pyrtma.internal_types.MT["Acknowledge"]
+        header.msg_type = RTMA.MT["Acknowledge"]
         header.send_time = time.time()
-        header.src_mod_id = pyrtma.constants.MID_MESSAGE_MANAGER
+        header.src_mod_id = RTMA.constants.MID_MESSAGE_MANAGER
         header.dest_mod_id = self.id
         header.num_data_bytes = 0
 
@@ -142,10 +140,10 @@ class MessageManager:
     def assign_module_id(self):
         current_ids = [mod.id for mod in self.modules.values()]
 
-        MAX_DYN_IDS = pyrtma.constants.MAX_MODULES - pyrtma.constants.DYN_MOD_ID_START
+        MAX_DYN_IDS = RTMA.constants.MAX_MODULES - RTMA.constants.DYN_MOD_ID_START
         for i in range(0, MAX_DYN_IDS):
 
-            mod_id = self.next_dynamic_mod_id_offset + pyrtma.constants.DYN_MOD_ID_START
+            mod_id = self.next_dynamic_mod_id_offset + RTMA.constants.DYN_MOD_ID_START
             self.next_dynamic_mod_id_offset += 1
             if self.next_dynamic_mod_id_offset == MAX_DYN_IDS:
                 self.next_dynamic_mod_id_offset = 0
@@ -260,12 +258,12 @@ class MessageManager:
         dest_host_id = msg.header.dest_host_id
 
         # Verify that the module & host ids are valid
-        if dest_mod_id < 0 or dest_mod_id > pyrtma.constants.MAX_MODULES:
+        if dest_mod_id < 0 or dest_mod_id > RTMA.constants.MAX_MODULES:
             self.logger.error(
                 f"MessageManager::forward_message: Got invalid dest_mod_id [{dest_mod_id}]"
             )
 
-        if dest_host_id < 0 or dest_host_id > pyrtma.constants.MAX_HOSTS:
+        if dest_host_id < 0 or dest_host_id > RTMA.constants.MAX_HOSTS:
             self.logger.error(
                 f"MessageManager::forward_message: Got invalid dest_host_id [{dest_host_id}]"
             )
@@ -329,9 +327,9 @@ class MessageManager:
         # src_module.send_ack()
 
         header = self.header_cls()
-        header.msg_type = pyrtma.internal_types.MT["Acknowledge"]
+        header.msg_type = RTMA.MT["Acknowledge"]
         header.send_time = time.time()
-        header.src_mod_id = pyrtma.constants.MID_MESSAGE_MANAGER
+        header.src_mod_id = RTMA.constants.MID_MESSAGE_MANAGER
         header.dest_mod_id = src_module.id
         header.num_data_bytes = 0
 
@@ -357,9 +355,9 @@ class MessageManager:
         header = self.header_cls()
         data = pyrtma.internal_types.FailedMessage()
 
-        header.msg_type = pyrtma.internal_types.MT["FailedMessage"]
+        header.msg_type = RTMA.MT["FailedMessage"]
         header.send_time = time.time()
-        header.src_mod_id = pyrtma.constants.MID_MESSAGE_MANAGER
+        header.src_mod_id = RTMA.constants.MID_MESSAGE_MANAGER
         header.num_data_bytes = ctypes.sizeof(data)
 
         data.dest_mod_id = dest_module.id
@@ -369,8 +367,7 @@ class MessageManager:
         failed_msg = Message(header, data, buffer=self._buffer)
 
         if (
-            failed_msg.data.msg_header.msg_type
-            == pyrtma.internal_types.MT["FailedMessage"]
+            failed_msg.data.msg_header.msg_type == RTMA.MT["FailedMessage"]
         ):  # avoid unlikely infinite recursion
             return
 
@@ -385,9 +382,9 @@ class MessageManager:
         header = self.header_cls()
         data = pyrtma.internal_types.TimingMessage()
 
-        header.msg_type = pyrtma.internal_types.MT["TimingMessage"]
+        header.msg_type = RTMA.MT["TimingMessage"]
         header.send_time = time.time()
-        header.src_mod_id = pyrtma.constants.MID_MESSAGE_MANAGER
+        header.src_mod_id = RTMA.constants.MID_MESSAGE_MANAGER
         header.num_data_bytes = ctypes.sizeof(data)
 
         tmsg = Message(header, data, buffer=self._buffer)
@@ -405,7 +402,7 @@ class MessageManager:
     def process_message(
         self, src_module: Module, msg: Message, wlist: List[socket.socket]
     ):
-        msg_name = pyrtma.internal_types.MT_BY_ID.get(msg.header.msg_type)
+        msg_name = RTMA.MT_BY_ID.get(msg.header.msg_type)
 
         if msg_name == "Connect":
             if self.connect_module(src_module, msg):

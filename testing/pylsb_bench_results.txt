@@ -1,4 +1,4 @@
-pyrtma (Native) bench tests:
+pylsb (Native) bench tests:
 
 "1 Producer, No Consumers:"
 

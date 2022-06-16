@@ -3,7 +3,7 @@ import time
 
 sys.path.append("../")
 
-from pyrtma import *
+from pylsb import *
 
 # Order of included files is important
 include_files = [
@@ -20,8 +20,8 @@ def publisher(server="127.0.0.1:7111", timecode=False):
     mod = Client(timecode=timecode)
     mod.connect(server_name=server)
 
-    for name, msg in RTMA.msg_defs.items():
-        mt = RTMA.MT.get(name)
+    for name, msg in LSB.msg_defs.items():
+        mt = LSB.MT.get(name)
         if not mt or mt < 1000:
             continue
         print(name)
@@ -38,10 +38,10 @@ def subscriber(server="127.0.0.1:7111", timecode=False):
     mod.connect(server_name=server)
 
     # Select the messages to receive
-    mts = RTMA.MT.values()
+    mts = LSB.MT.values()
     for mt in mts:
         if mt > 1000:
-            mod.subscribe([RTMA.MT_BY_ID[mt]])
+            mod.subscribe([LSB.MT_BY_ID[mt]])
     mod.subscribe(["Exit"])
 
     print("Waiting for packets...")
@@ -64,7 +64,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--server", default="127.0.0.1:7111", help="RTMA Message Manager ip address."
+        "--server", default="127.0.0.1:7111", help="LSB Message Manager ip address."
     )
     parser.add_argument(
         "-t", "--timecode", action="store_true", help="Use timecode in message header"
@@ -80,10 +80,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.pub:
-        print("pyrtma Publisher")
+        print("pylsb Publisher")
         publisher(args.server, timecode=args.timecode)
     elif args.sub:
-        print("pyrtma Subscriber")
+        print("pylsb Subscriber")
         subscriber(args.server, timecode=args.timecode)
     else:
         print("Unknown input")

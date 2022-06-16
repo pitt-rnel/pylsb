@@ -1,13 +1,13 @@
 from setuptools import setup
 
 setup(
-    name="pyrtma",
+    name="pylsb",
     version="0.1",
-    description="RTMA client written in Python",
-    url="http://github.com/dmw109/pyrmta",
-    author="David Weir",
+    description="LabSwitchboard client written in Python",
+    url="http://github.com/pitt-rnel/pylsb",
+    author="David Weir and RNEL",
     author_email="dmw109@pitt.edu",
     license="MIT",
-    packages=["pyrtma"],
+    packages=["pylsb"],
     zip_safe=False,
 )

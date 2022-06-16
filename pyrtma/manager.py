@@ -114,7 +114,7 @@ class MessageManager:
 
         self.modules[self.listen_socket] = mm_module
 
-        self._buffer = bytearray(1024 ** 2)
+        self._buffer = bytearray(1024**2)
 
         # Address Reuse allowed for testing
         if debug:

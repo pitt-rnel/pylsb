@@ -52,7 +52,7 @@ def subscriber(server="127.0.0.1:7111", timecode=False):
             if msg is not None:
                 # msg.hexdump()
                 print(msg)
-                if msg.msg_name == "Exit":
+                if msg.name == "Exit":
                     print("Goodbye.")
                     break
         except KeyboardInterrupt:

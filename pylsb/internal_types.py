@@ -206,6 +206,13 @@ class Message:
         return data
 
     @property
+    def name(self) -> str:
+        if self._header is None:
+            return ""
+        else:
+            return LSB.MT_BY_ID[self.header.msg_type]
+
+    @property
     def _bufsz(self) -> int:
         return len(self._buffer)
 

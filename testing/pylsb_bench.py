@@ -99,13 +99,13 @@ def subscriber_loop(sub_id=0, num_msgs=100000, msg_size=128, server="127.0.0.1:7
     while msg_count < num_msgs:
         msg = mod.read_message(timeout=0.100)
         if msg is not None:
-            if msg.msg_name == "TEST":
+            if msg.name == "TEST":
                 if msg_count == 0:
                     # test_msg_size = msg.msg_size
                     tic = time.perf_counter()
                 toc = time.perf_counter()
                 msg_count += 1
-            elif msg.msg_name == "Exit":
+            elif msg.name == "Exit":
                 break
         if tic and (time.perf_counter() - toc) > 1:
             print(f"Subscriber [{sub_id:d}] breaking early.")

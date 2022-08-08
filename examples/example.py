@@ -61,10 +61,10 @@ def subscriber(server="127.0.0.1:7111", timecode=False):
             msg = mod.read_message(timeout=0.200)
 
             if msg is not None:
-                if msg.msg_name == "USER_MESSAGE":
+                if msg.name == "USER_MESSAGE":
                     msg.hexdump()
                     print(msg)
-                elif msg.msg_name == "Exit":
+                elif msg.name == "Exit":
                     print("Goodbye.")
                     break
         except KeyboardInterrupt:

@@ -335,9 +335,6 @@ class Client(object):
         else:
             return None
 
-        # Add the name string to the msg
-        msg.msg_name = LSB.MT_BY_ID[msg.header.msg_type]
-
         # Read Data Section
         if msg.data_size:
             try:

@@ -1,7 +1,6 @@
 import re
 import ctypes
-import ast
-from typing import List
+from typing import List, Dict, Tuple
 from collections import defaultdict
 from .internal_types import LSB, __msg_data_print__
 
@@ -33,65 +32,66 @@ def camelcase(name):
     return "".join(pieces)
 
 
-def expand(token: str, defines):
-    return defines["constants"].get(token) or LSB.constants.get(token) or token
+def preprocess(text: str) -> Tuple[str, Dict]:
+    # Strip Inline Comments
+    text = re.sub(r"//.*\n", "\n", text)
 
+    # Strip Block Comments
+    text = re.sub(r"/\*.*\*/", "\n", text)
 
-def expand_expression(expression: str, defines):
-    if not any((c in ("*+-/") for c in expression)):
-        return str(expand(expression, defines))
+    # Strip Tabs
+    text = re.sub(r"\t+", " ", text)
 
-    # Get any names in the expression
-    tokens = [
-        node.id
-        for node in ast.walk(ast.parse(expression))
-        if isinstance(node, ast.Name)
-    ]
+    # Find and replace all previously defined constants
+    for constant, value in LSB.constants.items():
+        text = re.sub(r"\b" + re.escape(constant) + r"\b", str(value), text)
 
-    if len(tokens) == 0:
-        return expression
+    # Get Defines (Only simple one line constants here)
+    macros = re.findall(r"#define\s*(\w+)\s+([\(\)\[\]\w \*/\+-]+)\n", text)
 
-    for token in tokens:
-        expression = re.sub(token, str(expand(token, defines)), expression)
+    # Expand all the macros
+    for n, (macro, expression) in enumerate(macros):
+        for m, (other_macro, other_expression) in enumerate(macros[n:]):
+            macros[m + n] = (
+                other_macro,
+                re.sub(r"\b" + re.escape(macro) + r"\b", expression, other_expression),
+            )
 
-    return expression
-
-
-def parse_defines(text: str):
     defines = {}
     defines["MT"] = {}
     defines["MID"] = {}
     defines["constants"] = {}
-    defines["expressions"] = {}
 
-    # Get Defines (Only simple one line constants here)
-    c_defines = re.findall(r"#define\s*(\w+)\s+([\(\)\[\]\w \*/\+-]+)\n", text)
-
-    for name, expression in c_defines:
-        name = name.strip()
-        expression = expression.strip()
-
-        while True:
-            expanded_expression = expand_expression(expression, defines)
-            if expression == expanded_expression:
-                break
-            expression = expanded_expression
-
-        if re.search(r"[a-zA-Z]", expanded_expression):
-            value = expanded_expression
+    for n, (macro, expression) in enumerate(macros):
+        # Evaluate the expression
+        if re.search(r"[a-zA-Z]", expression):
+            value = expression
         else:
-            value = eval(expanded_expression)
+            value = eval(expression)
 
-        if name.startswith("MT_"):
-            defines["MT"][camelcase(name.replace("MT_", ""))] = value
-        elif name.startswith("MID_"):
-            defines["MID"][name.replace("MID_", "")] = value
+        # Find and replace all defines in file with macro value
+        count = -1
+
+        def repl(match):
+            nonlocal count
+            count += 1
+            # Skip first match
+            if count == 0:
+                return match.group(0)
+            else:
+                return str(value)
+
+        text = re.sub(r"\b" + re.escape(macro) + r"\b", repl, text)
+
+        # Store a mapping for each define type
+        if macro.startswith("MT_"):
+            defines["MT"][camelcase(macro.replace("MT_", ""))] = value
+        elif macro.startswith("MID_"):
+            defines["MID"][macro.replace("MID_", "")] = value
         else:
-            defines["constants"][name] = value
+            defines["constants"][macro] = value
 
-        defines["expressions"][name] = expanded_expression
-
-    return defines
+    return text, defines
 
 
 def parse_typedefs(text: str):
@@ -137,11 +137,17 @@ def parse_structs(text: str):
             ftype = field_type.strip()
             flen = fmatch.group("length") or None
 
+            # Parse array lengths if required
             if flen:
-                try:
-                    flen = int(flen)
-                except ValueError:
-                    pass
+                if isinstance(flen, str):
+                    expression = flen.strip()
+                    # Should only have a numeric value or expression here
+                    if re.search(r"[a-zA-Z]", expression):
+                        raise RuntimeError(
+                            "Array length expression was not fully expanded."
+                        )
+                    else:
+                        flen = eval(expression)
 
             structs[struct_name].append((fname, ftype, flen))
 
@@ -181,30 +187,12 @@ def get_type(type_spec, typedefs, msg_defs):
     raise KeyError(f"Unable to map type {type_spec}.")
 
 
-def create_ctypes(defines, typedefs, structs):
+def create_ctypes(typedefs, structs):
     msg_defs = {}
 
     for msg_name, fields in structs.items():
         ctypes_fields = []
         for fname, ftype, flen in fields:
-            # Parse array lengths if required
-            if isinstance(flen, str):
-                expression = flen.strip()
-
-                while True:
-                    expanded_expression = expand_expression(expression, defines)
-                    if expression == expanded_expression:
-                        break
-                    expression = expanded_expression
-
-                # Should only have a numeric value here
-                if re.search(r"[a-zA-Z]", expanded_expression):
-                    raise RuntimeError(
-                        "Array length expression was not fully expanded."
-                    )
-                else:
-                    flen = eval(expanded_expression)
-
             if flen:
                 ctypes_fields.append(
                     (fname, get_type(ftype, typedefs, msg_defs) * flen)
@@ -229,19 +217,10 @@ def parse_file(filename):
     with open(filename, "r") as f:
         text = f.read()
 
-    # Strip Inline Comments
-    text = re.sub(r"//.*\n", "\n", text)
-
-    # Strip Block Comments
-    text = re.sub(r"/\*.*\*/", "\n", text)
-
-    # Strip Tabs
-    text = re.sub(r"\t+", " ", text)
-
-    defines = parse_defines(text)
+    text, defines = preprocess(text)
     typedefs = parse_typedefs(text)
     structs = parse_structs(text)
-    msg_defs = create_ctypes(defines, typedefs, structs)
+    msg_defs = create_ctypes(typedefs, structs)
 
     # Only update the module after we are done parsing
     LSB.MT.update(defines["MT"])

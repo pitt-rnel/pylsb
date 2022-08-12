@@ -4,10 +4,22 @@ import time
 import os
 import ctypes
 
-import pylsb.internal_types
-from pylsb.internal_types import Message, MessageHeader, LSB
+from ._core import *
+from .constants import *
+
 from functools import wraps
-from typing import List, Optional, Tuple, Type, Union
+from typing import List, Optional, Tuple, Type, Union, Dict
+
+__all__ = [
+    "ClientError",
+    "MessageManagerNotFound",
+    "NotConnectedError",
+    "ConnectionLost",
+    "AcknowledgementTimeout",
+    "InvalidDestinationModule",
+    "InvalidDestinationHost",
+    "Client",
+]
 
 
 class ClientError(Exception):
@@ -64,14 +76,16 @@ def requires_connection(func):
 
 
 class Client(object):
-    def __init__(self, module_id: int = 0, host_id: int = 0, timecode: bool = False):
+    def __init__(
+        self, module_id: int = 0, host_id: int = 0, timecode: bool = False,
+    ):
         self._module_id = module_id
         self._host_id = host_id
         self._msg_count = 0
         self._server = ("", -1)
         self._connected = False
         self._header_cls = Message.set_header_cls(timecode)
-        self._recv_buffer = bytearray(1024**2)
+        self._recv_buffer = bytearray(1024 ** 2)
 
     def __del__(self):
         if self._connected:
@@ -111,7 +125,7 @@ class Client(object):
 
         self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
-        msg = pylsb.internal_types.Connect()
+        msg = CONNECT()
         msg.logger_status = int(logger_status)
         msg.daemon_status = int(daemon_status)
 
@@ -125,7 +139,7 @@ class Client(object):
     def disconnect(self):
         try:
             if self._connected:
-                self.send_signal("Disconnect")
+                self.send_signal(MT_DISCONNECT)
                 ack_msg = self.wait_for_acknowledgement(timeout=0.5)
         except AcknowledgementTimeout:
             pass
@@ -163,64 +177,64 @@ class Client(object):
 
     @requires_connection
     def send_module_ready(self):
-        msg = pylsb.internal_types.ModuleReady()
+        msg = MODULE_READY()
         msg.pid = os.getpid()
         self.send_message(msg)
 
-    def _subscription_control(self, msg_list: List[str], ctrl_msg: str):
+    def _subscription_control(self, msg_list: List[int], ctrl_msg: str):
         if not isinstance(msg_list, list):
             msg_list = [msg_list]
 
         if ctrl_msg == "Subscribe":
-            msg = pylsb.internal_types.Subscribe()
+            msg = SUBSCRIBE()
         elif ctrl_msg == "Unsubscribe":
-            msg = pylsb.internal_types.Subscribe()
+            msg = SUBSCRIBE()
         elif ctrl_msg == "PauseSubscription":
-            msg = pylsb.internal_types.PauseSubscription()
+            msg = PAUSE_SUBSCRIPTION()
         elif ctrl_msg == "ResumeSubscription":
-            msg = pylsb.internal_types.ResumeSubscription()
+            msg = RESUME_SUBSCRIPTION()
         else:
             raise TypeError("Unknown control message type.")
 
-        for msg_name in msg_list:
-            msg.msg_type = LSB.MT[msg_name]
+        for msg_type in msg_list:
+            msg.msg_type = msg_type
             self.send_message(msg)
 
     @requires_connection
-    def subscribe(self, msg_list: List[str]):
+    def subscribe(self, msg_list: List[int]):
         self._subscription_control(msg_list, "Subscribe")
 
     @requires_connection
-    def unsubscribe(self, msg_list: List[str]):
+    def unsubscribe(self, msg_list: List[int]):
         self._subscription_control(msg_list, "Unsubscribe")
 
     @requires_connection
-    def pause_subscription(self, msg_list: List[str]):
+    def pause_subscription(self, msg_list: List[int]):
         self._subscription_control(msg_list, "PauseSubscription")
 
     @requires_connection
-    def resume_subscription(self, msg_list: List[str]):
+    def resume_subscription(self, msg_list: List[int]):
         self._subscription_control(msg_list, "ResumeSubscription")
 
     @requires_connection
     def send_signal(
         self,
-        signal_name: str,
+        signal_type: int,
         dest_mod_id: int = 0,
         dest_host_id: int = 0,
         timeout: float = -1,
     ):
 
         # Verify that the module & host ids are valid
-        if dest_mod_id < 0 or dest_mod_id > LSB.constants.MAX_MODULES:
+        if dest_mod_id < 0 or dest_mod_id > MAX_MODULES:
             raise InvalidDestinationModule(f"Invalid dest_mod_id  of [{dest_mod_id}]")
 
-        if dest_host_id < 0 or dest_host_id > LSB.constants.MAX_HOSTS:
+        if dest_host_id < 0 or dest_host_id > MAX_HOSTS:
             raise InvalidDestinationHost(f"Invalid dest_host_id of [{dest_host_id}]")
 
         # Assume that msg_type, num_data_bytes, data - have been filled in
         header = self._header_cls()
-        header.msg_type = LSB.MT[signal_name]
+        header.msg_type = signal_type
         header.msg_count = self._msg_count
         header.send_time = time.time()
         header.recv_time = 0.0
@@ -249,21 +263,21 @@ class Client(object):
     @requires_connection
     def send_message(
         self,
-        msg_data: ctypes.Structure,
+        msg_data: MessageData,
         dest_mod_id: int = 0,
         dest_host_id: int = 0,
         timeout: float = -1,
     ):
         # Verify that the module & host ids are valid
-        if dest_mod_id < 0 or dest_mod_id > LSB.constants.MAX_MODULES:
+        if dest_mod_id < 0 or dest_mod_id > MAX_MODULES:
             raise InvalidDestinationModule(f"Invalid dest_mod_id of [{dest_mod_id}]")
 
-        if dest_host_id < 0 or dest_host_id > LSB.constants.MAX_HOSTS:
+        if dest_host_id < 0 or dest_host_id > MAX_HOSTS:
             raise InvalidDestinationHost(f"Invalid dest_host_id of [{dest_host_id}]")
 
         # Assume that msg_type, num_data_bytes, data - have been filled in
         header = self._header_cls()
-        header.msg_type = LSB.MT[msg_data.__class__.__name__]
+        header.msg_type = msg_data.type_id
         header.msg_count = self._msg_count
         header.send_time = time.time()
         header.recv_time = 0.0
@@ -358,7 +372,7 @@ class Client(object):
             while True:
                 msg = self.read_message(ack=True)
                 if msg is not None:
-                    if msg.header.msg_type == LSB.MT["Acknowledge"]:
+                    if msg.header.msg_type == MT_ACKNOWLEDGE:
                         break
             return msg
         else:
@@ -368,7 +382,7 @@ class Client(object):
             while time_remaining > 0:
                 msg = self.read_message(timeout=time_remaining, ack=True)
                 if msg is not None:
-                    if msg.header.msg_type == LSB.MT["Acknowledge"]:
+                    if msg.header.msg_type == MT_ACKNOWLEDGE:
                         return msg
 
                 time_now = time.perf_counter()

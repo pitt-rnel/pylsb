@@ -7,8 +7,8 @@ import random
 import ctypes
 import os
 
-import pylsb.internal_types
-from pylsb.internal_types import Message, MessageHeader, LSB
+from ._core import *
+from .constants import *
 
 from typing import Dict, List, Tuple, Set, Type, Union, Optional
 from dataclasses import dataclass
@@ -32,9 +32,9 @@ class Module:
     def send_ack(self):
         # Just send a header
         header = self.header_cls()
-        header.msg_type = LSB.MT["Acknowledge"]
+        header.msg_type = MT_ACKNOWLEDGE
         header.send_time = time.time()
-        header.src_mod_id = LSB.constants.MID_MESSAGE_MANAGER
+        header.src_mod_id = MID_MESSAGE_MANAGER
         header.dest_mod_id = self.id
         header.num_data_bytes = 0
 
@@ -114,7 +114,7 @@ class MessageManager:
 
         self.modules[self.listen_socket] = mm_module
 
-        self._buffer = bytearray(1024**2)
+        self._buffer = bytearray(1024 ** 2)
 
         # Address Reuse allowed for testing
         if debug:
@@ -137,13 +137,13 @@ class MessageManager:
         console.setFormatter(formatter)
         self.logger.addHandler(console)
 
-    def assign_module_id(self):
+    def assign_module_id(self) -> int:
         current_ids = [mod.id for mod in self.modules.values()]
 
-        MAX_DYN_IDS = LSB.constants.MAX_MODULES - LSB.constants.DYN_MOD_ID_START
+        MAX_DYN_IDS = MAX_MODULES - DYN_MOD_ID_START
         for i in range(0, MAX_DYN_IDS):
 
-            mod_id = self.next_dynamic_mod_id_offset + LSB.constants.DYN_MOD_ID_START
+            mod_id = self.next_dynamic_mod_id_offset + DYN_MOD_ID_START
             self.next_dynamic_mod_id_offset += 1
             if self.next_dynamic_mod_id_offset == MAX_DYN_IDS:
                 self.next_dynamic_mod_id_offset = 0
@@ -156,6 +156,8 @@ class MessageManager:
         self.logger.error(
             f"MessageManager::assign_module_id: All valid dynamic IDs are in use"
         )
+
+        raise RuntimeError("Exceeded maximum limit of allowed modules.")
 
     def connect_module(
         self, src_module: Module, msg: Message
@@ -198,12 +200,12 @@ class MessageManager:
         self.remove_module(src_module)
 
     def add_subscription(self, src_module: Module, msg: Message):
-        sub = pylsb.internal_types.Subscribe.from_buffer(msg.data)
+        sub = SUBSCRIBE.from_buffer(msg.data)
         self.subscriptions[sub.msg_type].add(src_module)
         self.logger.info(f"SUBSCRIBE- {src_module!s} to MT:{sub.msg_type}")
 
     def remove_subscription(self, src_module: Module, msg: Message):
-        sub = pylsb.internal_types.Unsubscribe.from_buffer(msg.data)
+        sub = UNSUBSCRIBE.from_buffer(msg.data)
         # Silently let modules unsubscribe from messages that they are not subscribed to.
         self.subscriptions[sub.msg_type].discard(src_module)
         self.logger.info(f"UNSUBSCRIBE- {src_module!s} to MT:{sub.msg_type}")
@@ -215,7 +217,7 @@ class MessageManager:
         self.remove_subscription(src_module, msg)
 
     def register_module_ready(self, src_module: Module, msg: Message):
-        mr = pylsb.internal_types.ModuleReady.from_buffer(msg.data)
+        mr = MODULE_READY.from_buffer(msg.data)
         src_module.pid = mr.pid
 
     def read_message(self, sock: socket.socket) -> Optional[Message]:
@@ -258,12 +260,12 @@ class MessageManager:
         dest_host_id = msg.header.dest_host_id
 
         # Verify that the module & host ids are valid
-        if dest_mod_id < 0 or dest_mod_id > LSB.constants.MAX_MODULES:
+        if dest_mod_id < 0 or dest_mod_id > MAX_MODULES:
             self.logger.error(
                 f"MessageManager::forward_message: Got invalid dest_mod_id [{dest_mod_id}]"
             )
 
-        if dest_host_id < 0 or dest_host_id > LSB.constants.MAX_HOSTS:
+        if dest_host_id < 0 or dest_host_id > MAX_HOSTS:
             self.logger.error(
                 f"MessageManager::forward_message: Got invalid dest_host_id [{dest_host_id}]"
             )
@@ -327,9 +329,9 @@ class MessageManager:
         # src_module.send_ack()
 
         header = self.header_cls()
-        header.msg_type = LSB.MT["Acknowledge"]
+        header.msg_type = MT_ACKNOWLEDGE
         header.send_time = time.time()
-        header.src_mod_id = LSB.constants.MID_MESSAGE_MANAGER
+        header.src_mod_id = MID_MESSAGE_MANAGER
         header.dest_mod_id = src_module.id
         header.num_data_bytes = 0
 
@@ -353,11 +355,11 @@ class MessageManager:
     ):
 
         header = self.header_cls()
-        data = pylsb.internal_types.FailedMessage()
+        data = FAILED_MESSAGE()
 
-        header.msg_type = LSB.MT["FailedMessage"]
+        header.msg_type = MT_FAILED_MESSAGE
         header.send_time = time.time()
-        header.src_mod_id = LSB.constants.MID_MESSAGE_MANAGER
+        header.src_mod_id = MID_MESSAGE_MANAGER
         header.num_data_bytes = ctypes.sizeof(data)
 
         data.dest_mod_id = dest_module.id
@@ -367,7 +369,7 @@ class MessageManager:
         failed_msg = Message(header, data, buffer=self._buffer)
 
         if (
-            failed_msg.data.msg_header.msg_type == LSB.MT["FailedMessage"]
+            failed_msg.data.msg_header.msg_type == MT_FAILED_MESSAGE
         ):  # avoid unlikely infinite recursion
             return
 
@@ -380,11 +382,11 @@ class MessageManager:
     def send_timing_message(self, wlist: List[socket.socket]):
 
         header = self.header_cls()
-        data = pylsb.internal_types.TimingMessage()
+        data = TIMING_MESSAGE()
 
-        header.msg_type = LSB.MT["TimingMessage"]
+        header.msg_type = MT_TIMING_MESSAGE
         header.send_time = time.time()
-        header.src_mod_id = LSB.constants.MID_MESSAGE_MANAGER
+        header.src_mod_id = MID_MESSAGE_MANAGER
         header.num_data_bytes = ctypes.sizeof(data)
 
         tmsg = Message(header, data, buffer=self._buffer)
@@ -402,37 +404,35 @@ class MessageManager:
     def process_message(
         self, src_module: Module, msg: Message, wlist: List[socket.socket]
     ):
-        msg_name = LSB.MT_BY_ID.get(msg.header.msg_type)
+        msg_type = msg.header.msg_type
 
-        if msg_name == "Connect":
+        if msg_type == MT_CONNECT:
             if self.connect_module(src_module, msg):
                 self.send_ack(src_module, wlist)
                 self.logger.info(f"CONNECT - {src_module!s}")
-        elif msg_name == "Disconnect":
+        elif msg_type == MT_DISCONNECT:
             self.send_ack(src_module, wlist)
             self.disconnect_module(src_module)
             self.logger.info(f"DISCONNECT - {src_module!s}")
-        elif msg_name == "Subscribe":
+        elif msg_type == MT_SUBSCRIBE:
             self.add_subscription(src_module, msg)
             self.send_ack(src_module, wlist)
-        elif msg_name == "Unsubscribe":
+        elif msg_type == MT_UNSUBSCRIBE:
             self.remove_subscription(src_module, msg)
             self.send_ack(src_module, wlist)
-        elif msg_name == "PauseSubscription":
+        elif msg_type == MT_PAUSE_SUBSCRIPTION:
             self.pause_subscription(src_module, msg)
             self.send_ack(src_module, wlist)
-        elif msg_name == "ResumeSubscription":
+        elif msg_type == MT_RESUME_SUBSCRIPTION:
             self.resume_subscription(src_module, msg)
             self.send_ack(src_module, wlist)
-        elif msg_name == "ModuleReady":  # used to store module pids
+        elif msg_type == MT_MODULE_READY:
+            # used to store module pids
             self.register_module_ready(src_module, msg)
         else:
-            if msg_name:
-                self.logger.debug(f"FORWARD - {msg_name} from {src_module!s}")
-            else:
-                self.logger.debug(
-                    f"FORWARD - {msg.header.msg_type} from {src_module!s}"
-                )
+            self.logger.debug(
+                f"FORWARD - msg_type:{msg.header.msg_type} from {src_module!s}"
+            )
             self.forward_message(msg, wlist)
 
         # message counts

@@ -3,29 +3,30 @@ import ctypes
 
 sys.path.append("../")
 
-from pylsb import *
+import pylsb
+
+# Choose a unique message type id number
+MT_USER_MESSAGE = 1234
 
 # Create a user defined message from a ctypes.Structure or basic ctypes
-class USER_MESSAGE(ctypes.Structure):
+class USER_MESSAGE(pylsb.MessageData):
     _fields_ = [
         ("str", ctypes.c_byte * 64),
         ("val", ctypes.c_double),
         ("arr", ctypes.c_int * 8),
     ]
 
+    type_id: int = MT_USER_MESSAGE
+    name: str = "USER_MESSAGE"
 
-# Choose a unique message type id number
-MT_USER_MESSAGE = 1234
 
-# Add the message definition to pylsb.core module internal dictionary
-pylsb.internal_types.AddMessage(
-    msg_name="USER_MESSAGE", msg_type=MT_USER_MESSAGE, msg_def=USER_MESSAGE
-)
+# Add the message definition to the pylsb module
+pylsb.AddMessage(MT_USER_MESSAGE, msg_cls=USER_MESSAGE)
 
 
 def publisher(server="127.0.0.1:7111", timecode=False):
     # Setup Client
-    mod = Client(timecode=timecode)
+    mod = pylsb.Client(timecode=timecode)
     mod.connect(server_name=server)
 
     # Build a packet to send
@@ -42,18 +43,18 @@ def publisher(server="127.0.0.1:7111", timecode=False):
             mod.send_message(msg)
             print("Sent a packet")
         else:
-            mod.send_signal("Exit")
+            mod.send_signal(pylsb.MT_EXIT)
             print("Goodbye")
             break
 
 
 def subscriber(server="127.0.0.1:7111", timecode=False):
     # Setup Client
-    mod = Client(timecode=timecode)
+    mod = pylsb.Client(timecode=timecode)
     mod.connect(server_name=server)
 
     # Select the messages to receive
-    mod.subscribe(["USER_MESSAGE", "Exit"])
+    mod.subscribe([MT_USER_MESSAGE, pylsb.MT_EXIT])
 
     print("Waiting for packets...")
     while True:
@@ -64,7 +65,7 @@ def subscriber(server="127.0.0.1:7111", timecode=False):
                 if msg.name == "USER_MESSAGE":
                     msg.hexdump()
                     print(msg)
-                elif msg.name == "Exit":
+                elif msg.name == "EXIT":
                     print("Goodbye.")
                     break
         except KeyboardInterrupt:

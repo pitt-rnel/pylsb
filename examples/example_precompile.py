@@ -45,11 +45,14 @@ def subscriber(server="127.0.0.1:7111", timecode=False):
             msg = mod.read_message(timeout=0.200)
 
             if msg is not None:
-                # msg.hexdump()
-                print(msg)
-                if msg.name == "EXIT":
+                if msg.name == "ACKNOWLEDGE":
+                    pass
+                elif msg.name == "EXIT":
                     print("Goodbye.")
                     break
+                else:
+                    print(msg.name)
+
         except KeyboardInterrupt:
             break
 

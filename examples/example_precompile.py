@@ -2,6 +2,9 @@
 Compile User Message Defintions first:
 
 $ python -m pylsb.compile -i ../testing/mjvr_types.h ../testing/climber_config.h > ./examples/rnel_msg_defs.py
+
+After compiling, import your definitions:
+from rnel_msg_defs import *
 """
 
 import sys

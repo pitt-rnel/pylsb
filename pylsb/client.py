@@ -84,7 +84,7 @@ class Client(object):
         self._msg_count = 0
         self._server = ("", -1)
         self._connected = False
-        self._header_cls = Message.set_header_cls(timecode)
+        self._header_cls = get_header_cls(timecode)
         self._recv_buffer = bytearray(1024 ** 2)
 
     def __del__(self):
@@ -305,7 +305,7 @@ class Client(object):
             # Socket was not ready to receive data. Drop the packet.
             print("x", end="")
 
-    def _sendall(self, buffer: bytes):
+    def _sendall(self, buffer: bytearray):
         try:
             self._sock.sendall(buffer)
         except ConnectionError as e:
@@ -325,11 +325,9 @@ class Client(object):
 
         # Read LSB Header Section
         if readfds:
-            msg = Message()
+            header = self._header_cls()
             try:
-                nbytes = self._sock.recv_into(
-                    msg.hdr_buffer, msg.header_size, socket.MSG_WAITALL
-                )
+                nbytes = self._sock.recv_into(header, header.size, socket.MSG_WAITALL)
                 """
                 Note:
                 MSG_WAITALL Flag:
@@ -339,30 +337,29 @@ class Client(object):
                 The request has been canceled or an error occurred.
                 """
 
-                if nbytes != msg.header_size:
+                if nbytes != header.size:
                     self._connected = False
                     raise ConnectionLost
 
-                msg.header.recv_time = time.time()
+                header.recv_time = time.time()
             except ConnectionError:
                 raise ConnectionLost
         else:
             return None
 
         # Read Data Section
-        if msg.data_size:
+        data = header.get_data()
+        if header.num_data_bytes:
             try:
-                nbytes = self._sock.recv_into(
-                    msg.data_buffer, msg.data_size, socket.MSG_WAITALL
-                )
+                nbytes = self._sock.recv_into(data, data.size, socket.MSG_WAITALL)
 
-                if nbytes != msg.data_size:
+                if nbytes != data.size:
                     self._connected = False
                     raise ConnectionLost
             except ConnectionError:
                 raise ConnectionLost
 
-        return msg
+        return Message(header, data)
 
     def wait_for_acknowledgement(self, timeout: float = 3):
         ret = 0

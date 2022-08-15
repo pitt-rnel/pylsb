@@ -17,7 +17,7 @@ class USER_MESSAGE(pylsb.MessageData):
     ]
 
     type_id: int = MT_USER_MESSAGE
-    name: str = "USER_MESSAGE"
+    type_name: str = "USER_MESSAGE"
 
 
 # Add the message definition to the pylsb module
@@ -63,7 +63,7 @@ def subscriber(server="127.0.0.1:7111", timecode=False):
 
             if msg is not None:
                 if msg.name == "USER_MESSAGE":
-                    msg.hexdump()
+                    msg.data.hexdump()
                     print(msg)
                 elif msg.name == "EXIT":
                     print("Goodbye.")

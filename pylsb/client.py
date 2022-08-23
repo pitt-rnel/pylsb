@@ -174,7 +174,7 @@ class Client(object):
         if ctrl_msg == "Subscribe":
             msg = pylsb.internal_types.Subscribe()
         elif ctrl_msg == "Unsubscribe":
-            msg = pylsb.internal_types.Subscribe()
+            msg = pylsb.internal_types.Unsubscribe()
         elif ctrl_msg == "PauseSubscription":
             msg = pylsb.internal_types.PauseSubscription()
         elif ctrl_msg == "ResumeSubscription":

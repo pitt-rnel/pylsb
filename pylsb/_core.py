@@ -163,6 +163,10 @@ class Message:
     @property
     def name(self) -> str:
         return self.data.type_name
+    
+    # custom print for message data
+    def pretty_print(self, add_tabs=0):
+        return self.header.pretty_print(add_tabs) + "\n" + self.data.pretty_print(add_tabs)
 
 
 # START OF LSB INTERNAL MESSAGE DEFINITIONS

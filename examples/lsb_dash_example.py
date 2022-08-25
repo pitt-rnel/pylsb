@@ -27,7 +27,11 @@ pylsb.AddMessage(MT_USER_MESSAGE, msg_cls=USER_MESSAGE)
 # instantiate client globally
 mod = pylsb.Client()
 
-app = Dash(__name__)
+app = Dash(
+    __name__,
+    title="LSB Example",
+    external_stylesheets=["https://codepen.io/chriddyp/pen/bWLwgP.css"],
+)
 
 msg_queue = Queue()  # global message queue
 
@@ -101,7 +105,7 @@ class LsbThread(threading.Thread):
                     time.sleep(2)
 
 
-send_txt_style = {"width": "100%", "height": "75px", "resize": "none", "margin": "auto"}
+send_txt_style = {"width": "100%", "height": "85px", "resize": "none", "margin": "auto"}
 
 read_txt_style = {"width": "100%", "height": "400px", "margin": "auto"}
 
@@ -109,13 +113,16 @@ div_style = {"width": "90%", "margin": "auto"}
 
 app.layout = html.Div(
     [
-        html.H1("LabSwitchboard Dash Example"),
+        html.H2("LabSwitchboard Dash Example"),
         html.Div(
-            html.Button("Send Message", id="send-msg", n_clicks=0), style=div_style
+            html.Button(
+                "Send Message", id="send-msg", n_clicks=0, className="button-primary"
+            ),
+            style=div_style,
         ),
         html.Div(
             [
-                html.H2("Sent Message:"),
+                html.H4("Sent Message:"),
                 dcc.Textarea(
                     id="send-txt",
                     value="",
@@ -128,7 +135,7 @@ app.layout = html.Div(
         ),
         html.Div(
             [
-                html.H2("Received messages:"),
+                html.H4("Received messages:"),
                 dcc.Textarea(
                     id="read-txt",
                     value="",

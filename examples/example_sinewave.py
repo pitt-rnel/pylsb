@@ -9,10 +9,7 @@ MT_SINE_TEST_MSG = 9000
 
 # Create a user defined message from a ctypes.Structure or basic ctypes
 class SINE_TEST_MSG(pylsb.MessageData):
-    _fields_ = [
-        ("time", ctypes.c_double),
-        ("value", ctypes.c_double)
-    ]
+    _fields_ = [("time", ctypes.c_double), ("value", ctypes.c_double)]
 
     type_id: int = MT_SINE_TEST_MSG
     type_name: str = "SINE_TEST_MSG"
@@ -33,18 +30,17 @@ def publisher(server="127.0.0.1:7111", timecode=False):
     # Build a packet to send
     msg = SINE_TEST_MSG()
     # sine params
-    A = 1 # sine amplitude
-    f = 2 # sine frequency
-    phase = 0 # sine phase
-    w = 2*math.pi*f # omega = 2*pi*f
+    A = 1  # sine amplitude
+    f = 2  # sine frequency
+    phase = 0  # sine phase
+    w = 2 * math.pi * f  # omega = 2*pi*f
 
-    
-    t0 = time.time() # init timer
+    t0 = time.time()  # init timer
     while True:
         try:
             # calculate and send sine value
             msg.time = time.time() - t0
-            msg.value = A*math.sin(w*msg.time + phase)
+            msg.value = A * math.sin(w * msg.time + phase)
             mod.send_message(msg)
             time.sleep(0.02)
         except KeyboardInterrupt:

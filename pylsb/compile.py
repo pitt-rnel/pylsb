@@ -154,8 +154,8 @@ def generate_msg_def(name: str, fields):
 
     msg_id = 0
     template = f"""
-@msg_def
-class {basename}(MessageData):
+@pylsb.msg_def
+class {basename}(pylsb.MessageData):
     _pack_ = True
     _fields_ = [
 {fstr}
@@ -172,8 +172,8 @@ def generate_sig_def(name: str):
     msg_id = 0
     template = f"""
 # Signal Definition
-@msg_def
-class {basename}(MessageData):
+@pylsb.msg_def
+class {basename}(pylsb.MessageData):
     _pack_ = True
     _fields_ = []
     _name = \"{basename}\"
@@ -199,7 +199,7 @@ def parse_file(filename, seq: int = 1):
 
     if seq == 1:
         print("import ctypes")
-        print("from pylsb import *")
+        print("import pylsb")
         print()
 
     print(f"# User Constants: {filename}")

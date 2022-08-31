@@ -35,6 +35,10 @@ ctypes_map = {
 }
 
 
+MAX_NAME_LEN = 32
+MAX_MESSAGE_DATA = 9000
+
+
 def print_ctype_array(arr):
     """expand and print ctype arrays"""
     max_len = 20

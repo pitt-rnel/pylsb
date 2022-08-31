@@ -10,6 +10,7 @@
 // Default address of the message manager
 #define DEFAULT_MM_IP "localhost:7111"
 
+#define MAX_LOGGER_FILENAME_LENGTH 256
 #define MAX_SPIKE_SOURCES 2
 #define MAX_SPIKE_SOURCES_N256 1 // single 256 neuroport used in Chicago
 #define MAX_SPIKE_CHANS_PER_SOURCE 128

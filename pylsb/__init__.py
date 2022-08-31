@@ -11,5 +11,4 @@ from ._core import (
     EXIT,
 )
 
-from .constants import *
 from .client import *

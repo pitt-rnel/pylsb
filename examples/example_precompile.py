@@ -21,7 +21,7 @@ def publisher(server="127.0.0.1:7111", timecode=False):
     mod = pylsb.Client(name="pub_test", timecode=timecode)
     mod.connect(server_name=server)
 
-    for msg_uid, msg_cls in user_msg_defs.items():
+    for msg_uid, msg_cls in pylsb.user_msg_defs.items():
         print(msg_cls._name)
         mod.send_message(msg_cls())
         time.sleep(0.100)
@@ -36,7 +36,7 @@ def subscriber(server="127.0.0.1:7111", timecode=False):
     mod.connect(server_name=server)
 
     # Select the messages to receive
-    mod.subscribe(list(user_msg_defs.values()))
+    mod.subscribe(list(pylsb.user_msg_defs.values()))
     mod.subscribe([pylsb.EXIT])
 
     print("Waiting for packets...")

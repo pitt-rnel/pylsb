@@ -16,9 +16,6 @@ class USER_MESSAGE(pylsb.MessageData):
 
     _name: str = "USER_MESSAGE"
 
-    def __str__(self):
-        return self.pretty_print()
-
 
 def publisher(server="127.0.0.1:7111", timecode=False):
     # Setup Client

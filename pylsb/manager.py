@@ -337,6 +337,8 @@ class MessageManager:
                         _, wlist, _ = select.select(
                             [], self.clients.keys(), [], self.write_timeout
                         )
+                    else:
+                        continue
 
                     for client_socket in rlist:
                         src = self.clients[client_socket]
@@ -350,7 +352,6 @@ class MessageManager:
                             continue
 
                         if got_msg:
-                            # TODO: What should we do with the wlist?
                             self.process_message(src, wlist)
 
         except KeyboardInterrupt:

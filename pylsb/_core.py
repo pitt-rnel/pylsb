@@ -209,12 +209,6 @@ class DISCONNECT(MessageData):
 
 
 @core_def
-class CONNECT_ACK(MessageData):
-    _fields_ = [("client_name", ctypes.c_char * 32), ("client_uid", ctypes.c_uint64)]
-    _name: ClassVar[str] = "CONNECT_ACK"
-
-
-@core_def
 class SUBSCRIBE(MessageData):
     _fields_ = [("msg_name", ctypes.c_char * 32)]
     _name: ClassVar[str] = "SUBSCRIBE"
@@ -224,6 +218,12 @@ class SUBSCRIBE(MessageData):
 class UNSUBSCRIBE(MessageData):
     _fields_ = [("msg_name", ctypes.c_char * 32)]
     _name: ClassVar[str] = "UNSUBSCRIBE"
+
+
+@core_def
+class CONNECT_ACK(MessageData):
+    _fields_ = [("client_name", ctypes.c_char * 32), ("client_uid", ctypes.c_uint64)]
+    _name: ClassVar[str] = "CONNECT_ACK"
 
 
 @core_def

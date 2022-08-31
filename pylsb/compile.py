@@ -24,9 +24,6 @@ def preprocess(text: str) -> str:
 
 def parse_defines(text: str) -> Dict:
     defines = {}
-    defines["MT"] = {}
-    defines["MID"] = {}
-    defines["constants"] = {}
 
     # Get Defines (Only simple one line constants here)
     macros = re.findall(
@@ -36,14 +33,7 @@ def parse_defines(text: str) -> Dict:
     for name, exp in macros:
         name = name.strip()
         exp = exp.strip()
-
-        # Store a mapping for each define type
-        if name.startswith("MT_"):
-            defines["MT"][name] = exp
-        elif name.startswith("MID_"):
-            defines["MID"][name] = exp
-        else:
-            defines["constants"][name] = exp
+        defines[name] = exp
 
     return defines
 
@@ -55,19 +45,19 @@ def parse_typedefs(text: str) -> Dict:
 
     for typ, alias in c_typedefs:
         if alias.startswith("MDF_"):
-            # TODO:Non struct message defintion. Maybe drop support?
-            pass
-        else:
-            # Must typedef a native type
-            ctype = ctypes_map[typ.strip()]
+            if typ.strip() != "void":
+                raise RuntimeError("Non-struct message defs must be typedef void.")
 
-            # Create another alias for the native type
-            typedefs[alias.strip()] = ctype
+        # Must typedef a native type
+        ctype = ctypes_map[typ.strip()]
+
+        # Create another alias for the native type
+        typedefs[alias.strip()] = ctype
 
     return typedefs
 
 
-def parse_structs(msg_types, text: str) -> Dict:
+def parse_structs(text: str) -> Dict:
     structs = {}
 
     # Strip Newlines
@@ -105,11 +95,6 @@ def parse_structs(msg_types, text: str) -> Dict:
             c_fields.append((fname, ftype, flen))
 
         structs[name] = c_fields
-
-    # Add a placeholder for signal definitions
-    for msg_type in msg_types.keys():
-        if msg_type.startswith("MT_"):
-            structs.setdefault("MDF_" + msg_type[3:], None)
 
     return structs
 
@@ -152,7 +137,6 @@ def generate_msg_def(name: str, fields):
 
     fstr = "".join(f)
 
-    msg_id = 0
     template = f"""
 @pylsb.msg_def
 class {basename}(pylsb.MessageData):
@@ -169,7 +153,6 @@ class {basename}(pylsb.MessageData):
 def generate_sig_def(name: str):
     assert name.startswith("MDF_")
     basename = name[4:]
-    msg_id = 0
     template = f"""
 # Signal Definition
 @pylsb.msg_def
@@ -195,7 +178,7 @@ def parse_file(filename, seq: int = 1):
     text = preprocess(text)
     defines = parse_defines(text)
     typedefs = parse_typedefs(text)
-    structs = parse_structs(defines["MT"], text)
+    structs = parse_structs(text)
 
     if seq == 1:
         print("import ctypes")
@@ -203,23 +186,14 @@ def parse_file(filename, seq: int = 1):
         print()
 
     print(f"# User Constants: {filename}")
-    for name, value in defines["constants"].items():
-        print(generate_constant(name, value))
-
-    print()
-    print(f"# User Message IDs: {filename}")
-    for name, value in defines["MT"].items():
-        print(generate_constant(name, value))
-
-    print()
-    print(f"# User Module IDs: {filename}")
-    for name, value in defines["MID"].items():
+    for name, value in defines.items():
         print(generate_constant(name, value))
 
     print()
     print(f"# User Type Definitions: {filename}")
     for name, value in typedefs.items():
-        print(generate_constant(name, value))
+        if not name.startswith("MDF_"):
+            print(generate_constant(name, value))
 
     ctypes_map.update(typedefs)
 
@@ -228,12 +202,13 @@ def parse_file(filename, seq: int = 1):
 
     for name, fields in structs.items():
         if name.startswith("MDF_"):
-            if fields is not None:
-                print(generate_msg_def(name, fields), end="")
-            else:
-                print(generate_sig_def(name), end="")
+            print(generate_msg_def(name, fields), end="")
         else:
             print(generate_struct(name, fields), end="")
+
+    for name in typedefs.keys():
+        if name.startswith("MDF_"):
+            print(generate_sig_def(name), end="")
 
 
 def compile(include_files: List):

@@ -8,7 +8,6 @@ import ctypes
 import os
 
 from ._core import *
-from .constants import *
 
 from typing import Dict, List, Tuple, Set, Type, Union, Optional
 from dataclasses import dataclass

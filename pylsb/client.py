@@ -5,7 +5,6 @@ import os
 import ctypes
 
 from ._core import *
-from .constants import *
 
 from functools import wraps
 from typing import List, Optional, Tuple, Type, Union, Dict

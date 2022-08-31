@@ -103,6 +103,18 @@
 //
 // MDF DEFINTIONS AND OTHER TYPEDEFS
 //
+
+typedef void MDF_EXTRACTION_REQUEST;
+typedef void MDF_TRIAL_END;
+typedef void MDF_REP_END;
+typedef void MDF_CLEAR_LINE;
+typedef void MDF_MECH_STIM_RESET;
+typedef void MDF_MECH_STIM_STAGE;
+typedef void MDF_MECH_STIM_WAITING;
+typedef void MDF_MECH_STIM_TRIGGER;
+typedef void MDF_MECH_STIM_CANCEL;
+typedef void MDF_MECH_STIM_DONE;
+
 typedef struct
 {
 	int serial_no;

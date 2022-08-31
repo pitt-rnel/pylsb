@@ -6,8 +6,6 @@ from collections import ChainMap
 from functools import lru_cache
 from typing import Type, ClassVar, Optional, Any, Dict, ChainMap
 
-from .constants import *
-
 core_msg_defs: Dict[int, Type["MessageData"]] = {}
 user_msg_defs: Dict[int, Type["MessageData"]] = {}
 
@@ -15,6 +13,7 @@ msg_defs: ChainMap[int, Type["MessageData"]] = ChainMap(core_msg_defs, user_msg_
 
 # Field type name to ctypes
 ctypes_map = {
+    "void": ctypes.c_void_p,
     "char": ctypes.c_char,
     "unsigned char": ctypes.c_ubyte,
     "byte": ctypes.c_char,

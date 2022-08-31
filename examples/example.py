@@ -5,10 +5,8 @@ sys.path.append("../")
 
 import pylsb
 
-# Choose a unique message type id number
-MT_USER_MESSAGE = 1234
-
 # Create a user defined message from a ctypes.Structure or basic ctypes
+@pylsb.msg_def
 class USER_MESSAGE(pylsb.MessageData):
     _fields_ = [
         ("str", ctypes.c_byte * 64),
@@ -16,20 +14,15 @@ class USER_MESSAGE(pylsb.MessageData):
         ("arr", ctypes.c_int * 8),
     ]
 
-    type_id: int = MT_USER_MESSAGE
-    type_name: str = "USER_MESSAGE"
+    _name: str = "USER_MESSAGE"
 
     def __str__(self):
         return self.pretty_print()
 
 
-# Add the message definition to the pylsb module
-pylsb.AddMessage(MT_USER_MESSAGE, msg_cls=USER_MESSAGE)
-
-
 def publisher(server="127.0.0.1:7111", timecode=False):
     # Setup Client
-    mod = pylsb.Client(timecode=timecode)
+    mod = pylsb.Client("test_pub", timecode=timecode)
     mod.connect(server_name=server)
 
     # Build a packet to send
@@ -46,18 +39,18 @@ def publisher(server="127.0.0.1:7111", timecode=False):
             mod.send_message(msg)
             print("Sent a packet")
         else:
-            mod.send_signal(pylsb.MT_EXIT)
+            mod.send_message(pylsb.EXIT())
             print("Goodbye")
             break
 
 
 def subscriber(server="127.0.0.1:7111", timecode=False):
     # Setup Client
-    mod = pylsb.Client(timecode=timecode)
+    mod = pylsb.Client("sub_test", timecode=timecode)
     mod.connect(server_name=server)
 
     # Select the messages to receive
-    mod.subscribe([MT_USER_MESSAGE, pylsb.MT_EXIT])
+    mod.subscribe([USER_MESSAGE, pylsb.EXIT])
 
     print("Waiting for packets...")
     while True:
@@ -69,11 +62,16 @@ def subscriber(server="127.0.0.1:7111", timecode=False):
                     msg.data.hexdump()
                     print("")
                     print(msg.pretty_print())
-                elif msg.name == "EXIT":
+                elif msg.uid == pylsb.EXIT.uid():
                     print("Goodbye.")
                     break
         except KeyboardInterrupt:
             break
+
+    mod.unsubscribe(["USER_MESSAGE", "EXIT"])
+    msg = mod.read_message(timeout=0.200)
+    msg = mod.read_message(timeout=0.200)
+    mod.disconnect()
 
 
 if __name__ == "__main__":

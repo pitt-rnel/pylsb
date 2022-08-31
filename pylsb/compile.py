@@ -152,18 +152,15 @@ def generate_msg_def(name: str, fields):
 
     fstr = "".join(f)
 
-    msg_id = "MT_" + basename
+    msg_id = 0
     template = f"""
-class {name}(MessageData):
+@msg_def
+class {basename}(MessageData):
     _pack_ = True
     _fields_ = [
 {fstr}
     ]
-    type_id = {msg_id}
-    type_name = \"{basename}\"
-
-
-user_msg_defs[{msg_id}] = {name}
+    _name = \"{basename}\"
 
 """
     return template
@@ -172,17 +169,14 @@ user_msg_defs[{msg_id}] = {name}
 def generate_sig_def(name: str):
     assert name.startswith("MDF_")
     basename = name[4:]
-    msg_id = "MT_" + basename
+    msg_id = 0
     template = f"""
 # Signal Definition
-class {name}(MessageData):
+@msg_def
+class {basename}(MessageData):
     _pack_ = True
     _fields_ = []
-    type_id = {msg_id}
-    type_name = \"{basename}\"
-
-
-user_msg_defs[{msg_id}] = {name}
+    _name = \"{basename}\"
 
 """
     return template

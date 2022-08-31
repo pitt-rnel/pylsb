@@ -16,12 +16,13 @@ from collections import defaultdict, Counter
 
 
 @dataclass
-class Module:
+class _Client:
 
     conn: socket.socket
     address: Tuple[str, int]
     header_cls: Type[MessageHeader]
-    id: int = 0
+    uid: int = -1
+    name: str = ""
     pid: int = 0
     connected: bool = False
     is_logger: bool = False
@@ -30,22 +31,11 @@ class Module:
         self.conn.sendall(header)
         self.conn.sendall(payload)
 
-    def send_ack(self):
-        # Just send a header
-        header = self.header_cls()
-        header.msg_type = MT_ACKNOWLEDGE
-        header.send_time = time.time()
-        header.src_mod_id = MID_MESSAGE_MANAGER
-        header.dest_mod_id = self.id
-        header.num_data_bytes = 0
-
-        self.conn.sendall(header)
-
     def close(self):
         self.conn.close()
 
     def __str__(self):
-        return f"Module ID: {self.id} @ {self.address[0]}:{self.address[1]}"
+        return f"Client UID: {self.uid} @ {self.address[0]}:{self.address[1]}"
 
     def __hash__(self):
         return self.conn.__hash__()
@@ -61,7 +51,11 @@ class MessageManager:
         send_msg_timing=True,
     ):
 
-        self.ip_address = ip_address
+        if ip_address == socket.INADDR_ANY:
+            self.ip_address = ""  # bind and Module require a string input, '' is treated as INADDR_ANY by bind
+        else:
+            self.ip_address = ip_address
+
         self.port = port
 
         self.header_cls = get_header_cls(timecode)
@@ -70,7 +64,7 @@ class MessageManager:
         self.header_view = memoryview(self.header_buffer)
 
         self.read_timeout = 0.200
-        self.write_timeout = 0  # c++ message manager uses timeout = 0 for all modules except logger modules, which uses -1 (blocking)
+        self.write_timeout = 0
         self._debug = debug
         self.b_send_msg_timing = send_msg_timing
         self.logger = logging.getLogger(f"MessageManager@{ip_address}:{port}")
@@ -78,20 +72,15 @@ class MessageManager:
             logging.INFO
         )  # should eventually change this to WARNING or INFO. Could also tie to _debug property
 
-        if ip_address == socket.INADDR_ANY:
-            ip_address = ""  # bind and Module require a string input, '' is treated as INADDR_ANY by bind
-
         # Create the tcp listening socket
         self.listen_socket = socket.socket(
             family=socket.AF_INET, type=socket.SOCK_STREAM, proto=socket.IPPROTO_TCP
         )
-        self.listen_socket.bind((ip_address, port))
+        self.listen_socket.bind((self.ip_address, self.port))
         self.listen_socket.listen(socket.SOMAXCONN)
-        self.modules: Dict[socket.socket, Module] = {}
-        self.logger_modules: Set[Module] = set()
-        self.next_dynamic_mod_id_offset = 0
+        self.clients: Dict[socket.socket, _Client] = {}
 
-        self.subscriptions: Dict[int, Set[Module]] = defaultdict(set)
+        self.subscriptions: Dict[int, Set[_Client]] = defaultdict(set)
         self.sockets = [self.listen_socket]
         self.start_time = time.time()
 
@@ -106,17 +95,17 @@ class MessageManager:
         )
 
         # Add message manager to its module list
-        mm_module = Module(
+        self.mm_client = _Client(
             conn=self.listen_socket,
             address=(ip_address, port),
             header_cls=self.header_cls,
-            id=0,
+            uid=0,
             pid=os.getpid(),
             connected=True,
             is_logger=False,
         )
 
-        self.modules[self.listen_socket] = mm_module
+        self.clients[self.listen_socket] = self.mm_client
 
         self.data_buffer = bytearray(1024 ** 2)
         self.data_view = memoryview(self.data_buffer)
@@ -142,92 +131,85 @@ class MessageManager:
         console.setFormatter(formatter)
         self.logger.addHandler(console)
 
-    def assign_module_id(self) -> int:
-        current_ids = [mod.id for mod in self.modules.values()]
-
-        MAX_DYN_IDS = MAX_MODULES - DYN_MOD_ID_START
-        for i in range(0, MAX_DYN_IDS):
-
-            mod_id = self.next_dynamic_mod_id_offset + DYN_MOD_ID_START
-            self.next_dynamic_mod_id_offset += 1
-            if self.next_dynamic_mod_id_offset == MAX_DYN_IDS:
-                self.next_dynamic_mod_id_offset = 0
-
-            # check if mod id is already used, if it is, continue looping until we find an unused one
-            if mod_id not in current_ids:
-                return mod_id
-
-        # if we exit loop without returning, we failed to find a valid id
-        self.logger.error(
-            f"MessageManager::assign_module_id: All valid dynamic IDs are in use"
-        )
-
-        raise RuntimeError("Exceeded maximum limit of allowed modules.")
-
     @property
     def header(self) -> MessageHeader:
         return self.header_cls.from_buffer(self.header_view)
 
-    def connect_module(
-        self, src_module: Module, msg: Message
-    ):  # returns a success code
-        src_mod_id = msg.header.src_mod_id
-        if src_mod_id == 0:
-            src_module.id = self.assign_module_id()
-        else:
-            current_ids = [mod.id for mod in self.modules.values()]
-            if src_mod_id in current_ids:  # cannot have multiple modules with same ID
-                self.logger.info(f"CONNECT - {src_module!s}")
-                self.logger.error(
-                    f"MessageManager::connect_module: Module ID {src_module!s} already in use, connection refused."
-                )
-                self.remove_module(src_module)
-                return False
-            src_module.id = src_mod_id
+    def connect_client(self, client: _Client):  # returns a success code
+        msg = CONNECT.from_buffer(self.data_buffer)
 
-        # Convert the data blob into the correct msg struct
-        src_module.is_logger = msg.data.logger_status == 1
-        src_module.connected = True
-        if src_module.is_logger:
-            self.logger_modules.add(src_module)
+        client.name = msg.client_name.decode()
+        client.uid = hash_string(client.name.lower())
+        client.pid = msg.pid
+        client.connected = True
+
+        # Confirm the connection
+        header = self.header_cls()
+        header.timestamp = time.time()
+        header.src_uid = self.mm_client.uid
+        header.dest_uid = client.uid
+        header.msg_uid = CONNECT_ACK.uid()
+        header.num_bytes = ctypes.sizeof(CONNECT_ACK)
+
+        ack_msg = CONNECT_ACK()
+        ack_msg.client_name = client.name.encode()
+        ack_msg.client_uid = client.uid
+        client.send_message(header, ack_msg)
+
         return True
 
-    def remove_module(self, module: Module):
+    def disconnect_client(self, client: _Client):
         # Drop all subscriptions for this module
-        for msg_type, subscriber_set in self.subscriptions.items():
-            subscriber_set.discard(module)
+        for msg_uid, subscriber_set in self.subscriptions.items():
+            subscriber_set.discard(client)
 
-        # Discard from logger module set if needed
-        self.logger_modules.discard(module)
+        # Drop from our client mapping
+        client.close()
+        del self.clients[client.conn]
 
-        # Drop from our module mapping
-        module.close()
-        del self.modules[module.conn]
+    def add_subscription(self, client: _Client):
+        msg = SUBSCRIBE.from_buffer(self.data_buffer)
+        msg_name = msg.msg_name.decode()
+        msg_uid = hash_string(msg_name)
 
-    def disconnect_module(self, src_module: Module):
-        # src_module.send_ack() # moved to process_message
-        self.remove_module(src_module)
+        self.subscriptions[hash_string(msg_name)].add(client)
+        self.logger.info(f"SUBSCRIBE- {client!s} to {msg_name}:{msg_uid}")
 
-    def add_subscription(self, src_module: Module, msg: Message):
-        sub = SUBSCRIBE.from_buffer(msg.data)
-        self.subscriptions[sub.msg_type].add(src_module)
-        self.logger.info(f"SUBSCRIBE- {src_module!s} to MT:{sub.msg_type}")
+        # Confirm the subscription
+        header = self.header_cls()
+        header.timestamp = time.time()
+        header.src_uid = self.mm_client.uid
+        header.dest_uid = client.uid
+        header.msg_uid = SUBSCRIBE_ACK.uid()
+        header.num_bytes = ctypes.sizeof(SUBSCRIBE_ACK)
 
-    def remove_subscription(self, src_module: Module, msg: Message):
-        sub = UNSUBSCRIBE.from_buffer(msg.data)
+        ack_msg = SUBSCRIBE_ACK()
+        ack_msg.msg_name = msg_name.encode()
+        ack_msg.msg_uid = msg_uid
+        ack_msg.success = True
+        client.send_message(header, ack_msg)
+
+    def remove_subscription(self, client: _Client):
+        msg = UNSUBSCRIBE.from_buffer(self.data_buffer)
         # Silently let modules unsubscribe from messages that they are not subscribed to.
-        self.subscriptions[sub.msg_type].discard(src_module)
-        self.logger.info(f"UNSUBSCRIBE- {src_module!s} to MT:{sub.msg_type}")
+        msg_name = msg.msg_name.decode()
+        msg_uid = hash_string(msg_name)
+        self.subscriptions[msg_uid].discard(client)
+        self.logger.info(f"UNSUBSCRIBE- {client!s} to {msg_name}:{msg_uid}.")
 
-    def resume_subscription(self, src_module: Module, msg: Message):
-        self.add_subscription(src_module, msg)
+        # Confirm removal of subscription
+        header = self.header_cls()
+        header.timestamp = time.time()
+        header.src_uid = self.mm_client.uid
+        header.dest_uid = client.uid
+        header.msg_uid = UNSUBSCRIBE_ACK.uid()
+        header.num_bytes = ctypes.sizeof(UNSUBSCRIBE_ACK)
 
-    def pause_subscription(self, src_module: Module, msg: Message):
-        self.remove_subscription(src_module, msg)
-
-    def register_module_ready(self, src_module: Module, msg: Message):
-        mr = MODULE_READY.from_buffer(msg.data)
-        src_module.pid = mr.pid
+        ack_msg = UNSUBSCRIBE_ACK()
+        ack_msg.msg_name = msg_name.encode()
+        ack_msg.msg_uid = msg_uid
+        ack_msg.success = True
+        client.send_message(header, ack_msg)
 
     def read_message(self, sock: socket.socket) -> bool:
         # Read LSB Header Section
@@ -236,26 +218,25 @@ class MessageManager:
         )
 
         if nbytes != self.header_size:
-            mod = self.modules[sock]
+            client = self.clients[sock]
             self.logger.warning(
-                f"DROPPING - {mod!s} - No header returned from sock.recv_into."
+                f"DROPPING - {client!s} - No header returned from sock.recv_into."
             )
-            self.remove_module(mod)
+            self.disconnect_client(client)
             return False
 
         # Read Data Section
-        data_size = self.header.num_data_bytes
+        data_size = self.header.num_bytes
         if data_size:
             nbytes = sock.recv_into(self.data_buffer, data_size, socket.MSG_WAITALL)
 
             if nbytes != data_size:
-                mod = self.modules[sock]
+                client = self.clients[sock]
                 self.logger.warning(
-                    f"DROPPING - {mod!s} - No data returned from sock.recv_into."
+                    f"DROPPING - {client!s} - No data returned from sock.recv_into."
                 )
-                self.remove_module(mod)
+                self.disconnect_client(client)
                 return False
-
         return True
 
     def forward_message(
@@ -264,208 +245,69 @@ class MessageManager:
         data: Union[bytes, MessageData],
         wlist: List[socket.socket],
     ):
-        """Forward a message from other modules
-        The given message will be forwarded to:
-            - all subscribed logger modules (ALWAYS)
-            - if the message has a destination address, and it is subscribed to by that destination it will be forwarded only there
-            - if the message has no destination address, it will be forwarded to all subscribed modules
-        """
-
-        dest_mod_id = header.dest_mod_id
-        dest_host_id = header.dest_host_id
-
-        # Verify that the module & host ids are valid
-        if dest_mod_id < 0 or dest_mod_id > MAX_MODULES:
-            self.logger.error(
-                f"MessageManager::forward_message: Got invalid dest_mod_id [{dest_mod_id}]"
-            )
-
-        if dest_host_id < 0 or dest_host_id > MAX_HOSTS:
-            self.logger.error(
-                f"MessageManager::forward_message: Got invalid dest_host_id [{dest_host_id}]"
-            )
-
-        # Always forward to logger modules
-        self.send_to_loggers(header, data, wlist)
+        # Specific Client Destination
+        dest_uid = header.dest_uid
 
         # Subscriber set for this message type
-        subscribers = self.subscriptions[header.msg_type]
+        subscribers = self.subscriptions[header.msg_uid]
 
         # Send to a specific destination if it is subscribed
-        if dest_mod_id > 0:
-            for module in subscribers:
-                if module.id == dest_mod_id:
-                    if module.conn in wlist:
+        if dest_uid > 0:
+            for client in subscribers:
+                if client.uid == dest_uid:
+                    if client.conn in wlist:
                         try:
-                            module.send_message(header, data)
+                            client.send_message(header, data)
                         except ConnectionError as err:
                             self.logger.error(
-                                f"Connection Error on write to {module!s} - {err!s}"
+                                f"Connection Error on write to {client!s} - {err!s}"
                             )
-                            print("x", end="", flush=True)
-                            self.send_failed_message(module, header, time.time(), wlist)
                         return
                     else:
                         print("x", end="", flush=True)
-                        self.send_failed_message(module, header, time.time(), wlist)
                         return
             return  # if specified dest_mod_id is not in subscribers, do not send message (other than to loggers)
 
         # Send to all subscribed modules
-        for module in subscribers:
-            if module.conn in wlist:
+        for client in subscribers:
+            if client.conn in wlist:
                 try:
-                    module.send_message(header, data)
+                    client.send_message(header, data)
                 except ConnectionError as err:
                     self.logger.error(
-                        f"Connection Error on write to {module!s} - {err!s}"
+                        f"Connection Error on write to {client!s} - {err!s}"
                     )
                     print("x", end="", flush=True)
-                    self.send_failed_message(module, header, time.time(), wlist)
             else:
                 print("x", end="", flush=True)
-                self.send_failed_message(module, header, time.time(), wlist)
 
-    def send_to_loggers(
-        self, header: MessageHeader, payload, wlist: List[socket.socket]
-    ):
-        for module in self.logger_modules:
-            if module.conn not in wlist:
-                # Block until logger is ready
-                select.select([], [module.conn], [], None)
-            try:
-                module.send_message(header, payload)
-            except ConnectionError as err:
-                self.logger.error(f"Connection Error on write to {module!s} - {err!s}")
-                print("x", end="", flush=True)
-                self.send_failed_message(
-                    module, header, time.time(), wlist
-                )  # this could result in inifite recursion, this is prevented by send_failed_message returning if failed message type is failed_message.
-
-    def send_ack(self, src_module: Module, wlist: List[socket.socket]):
-        # src_module.send_ack()
-
-        header = self.header_cls()
-        header.msg_type = MT_ACKNOWLEDGE
-        header.send_time = time.time()
-        header.src_mod_id = MID_MESSAGE_MANAGER
-        header.dest_mod_id = src_module.id
-        header.num_data_bytes = 0
-
-        try:
-            src_module.send_message(header, b"")
-        except ConnectionError as err:
-            self.logger.error(f"Connection Error on write to {src_module!s} - {err!s}")
-            print("x", end="", flush=True)
-            self.send_failed_message(src_module, header, time.time(), wlist)
-
-        # Always forward to logger modules
-        self.send_to_loggers(header, b"", wlist)
-
-    def send_failed_message(
-        self,
-        dest_module: Module,
-        header: MessageHeader,
-        time_of_failure: float,
-        wlist: List[socket.socket],
-    ):
-
-        header = self.header_cls()
-        data = FAILED_MESSAGE()
-
-        header.msg_type = MT_FAILED_MESSAGE
-        header.send_time = time.time()
-        header.src_mod_id = MID_MESSAGE_MANAGER
-        header.num_data_bytes = ctypes.sizeof(data)
-
-        data.dest_mod_id = dest_module.id
-        data.time_of_failure = time_of_failure
-        data.msg_header = header
-
-        if (
-            data.msg_header.msg_type == MT_FAILED_MESSAGE
-        ):  # avoid unlikely infinite recursion
-            return
-
-        # send to logger modules AND modules subscribed to FAILED_MESSAGE
-        self.forward_message(header, data, wlist)
-
-        # add to message count
-        self.message_counts[header.msg_type] += 1
-
-    def send_timing_message(self, wlist: List[socket.socket]):
-
-        header = self.header_cls()
-        data = TIMING_MESSAGE()
-
-        header.msg_type = MT_TIMING_MESSAGE
-        header.send_time = time.time()
-        header.src_mod_id = MID_MESSAGE_MANAGER
-        header.num_data_bytes = ctypes.sizeof(data)
-
-        data.send_time = time.time()
-
-        for (mt, count) in self.message_counts.items():
-            data.timing[mt] = count
-        self.message_counts.clear()
-
-        for mod in self.modules.values():
-            data.ModulePID[mod.id] = mod.pid
-
-        self.forward_message(header, data, wlist)
-
-    @property
-    def message(self) -> Message:
+    def process_message(self, client: _Client, wlist: List[socket.socket]):
         hdr = self.header
-        return Message(hdr, hdr.get_data.from_buffer(self.data_buffer))
+        msg_uid = hdr.msg_uid
 
-    def process_message(self, src_module: Module, wlist: List[socket.socket]):
-        hdr = self.header
-        msg_type = hdr.msg_type
-
-        if msg_type == MT_CONNECT:
-            if self.connect_module(src_module, self.message):
-                self.send_ack(src_module, wlist)
-                self.logger.info(f"CONNECT - {src_module!s}")
-        elif msg_type == MT_DISCONNECT:
-            self.send_ack(src_module, wlist)
-            self.disconnect_module(src_module)
-            self.logger.info(f"DISCONNECT - {src_module!s}")
-        elif msg_type == MT_SUBSCRIBE:
-            self.add_subscription(src_module, self.message)
-            self.send_ack(src_module, wlist)
-        elif msg_type == MT_UNSUBSCRIBE:
-            self.remove_subscription(src_module, self.message)
-            self.send_ack(src_module, wlist)
-        elif msg_type == MT_PAUSE_SUBSCRIPTION:
-            self.pause_subscription(src_module, self.message)
-            self.send_ack(src_module, wlist)
-        elif msg_type == MT_RESUME_SUBSCRIPTION:
-            self.resume_subscription(src_module, self.message)
-            self.send_ack(src_module, wlist)
-        elif msg_type == MT_MODULE_READY:
-            # used to store module pids
-            self.register_module_ready(src_module, self.message)
+        if msg_uid == CONNECT.uid():
+            if self.connect_client(client):
+                self.logger.info(f"CONNECT - {client!s}")
+        elif msg_uid == DISCONNECT.uid():
+            self.disconnect_client(client)
+            self.logger.info(f"DISCONNECT - {client!s}")
+        elif msg_uid == SUBSCRIBE.uid():
+            self.add_subscription(client)
+        elif msg_uid == UNSUBSCRIBE.uid():
+            self.remove_subscription(client)
         else:
-            self.logger.debug(f"FORWARD - msg_type:{hdr.msg_type} from {src_module!s}")
-            data = self.data_view[: hdr.num_data_bytes]
+            self.logger.debug(f"FORWARD - msg_type:{hdr.msg_uid} from {client!s}")
+            data = self.data_view[: hdr.num_bytes]
             self.forward_message(hdr, data, wlist)
 
         # message counts
-        self.message_counts[hdr.msg_type] += 1
-        if (
-            self.b_send_msg_timing
-            and (time.time() - self.t_last_message_count)
-            > self.min_timing_message_period
-        ):
-            self.send_timing_message(wlist)
-            self.t_last_message_count = time.time()
+        self.message_counts[hdr.msg_uid] += 1
 
     def run(self):
         try:
             while True:
                 rlist, _, _ = select.select(
-                    self.modules.keys(), [], [], self.read_timeout
+                    self.clients.keys(), [], [], self.read_timeout
                 )
 
                 # Check for an incoming connection request
@@ -483,7 +325,7 @@ class MessageManager:
                         )
 
                         self.sockets.append(conn)
-                        self.modules[conn] = Module(conn, address, self.header_cls)
+                        self.clients[conn] = _Client(conn, address, self.header_cls)
                     except ValueError:
                         pass
 
@@ -493,27 +335,28 @@ class MessageManager:
                     # Check whichs clients are ready to receive data
                     if rlist:
                         _, wlist, _ = select.select(
-                            [], self.modules.keys(), [], self.write_timeout
+                            [], self.clients.keys(), [], self.write_timeout
                         )
 
                     for client_socket in rlist:
-                        src = self.modules[client_socket]
+                        src = self.clients[client_socket]
                         try:
                             got_msg = self.read_message(client_socket)
                         except ConnectionError as err:
                             self.logger.error(
                                 f"Connection Error on read, disconnecting  {src!s} - {err!s}"
                             )
-                            self.disconnect_module(src)
+                            self.disconnect_client(src)
                             continue
 
                         if got_msg:
+                            # TODO: What should we do with the wlist?
                             self.process_message(src, wlist)
 
         except KeyboardInterrupt:
             self.logger.info("Stopping Message Manager")
         finally:
-            for mod in self.modules:
+            for mod in self.clients:
                 mod.close()
 
 

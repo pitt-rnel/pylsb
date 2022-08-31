@@ -1,7 +1,9 @@
+import string
 import ctypes
 
 from dataclasses import dataclass
 from collections import ChainMap
+from functools import lru_cache
 from typing import Type, ClassVar, Optional, Any, Dict, ChainMap
 
 from .constants import *
@@ -30,10 +32,6 @@ ctypes_map = {
     "unsigned long long": ctypes.c_ulonglong,
     "float": ctypes.c_float,
     "double": ctypes.c_double,
-    "MODULE_ID": ctypes.c_short,
-    "HOST_ID": ctypes.c_short,
-    "MSG_TYPE": ctypes.c_int,
-    "MSG_COUNT": ctypes.c_int,
 }
 
 
@@ -53,8 +51,11 @@ def print_ctype_array(arr):
 
 # TODO: Make this class abstract
 class MessageData(ctypes.Structure):
-    type_id: ClassVar[int] = -1
-    type_name: ClassVar[str] = ""
+    _name: ClassVar[str] = ""
+
+    @classmethod
+    def uid(cls) -> int:
+        return hash_string(cls._name)
 
     @property
     def size(self) -> int:
@@ -96,20 +97,55 @@ class MessageData(ctypes.Structure):
             )
 
 
+"""
+to: char[32]
+from: char[32]
+timestamp: double
+subject: char[32]
+size: uint16
+
+total: 32 + 32 + 8 + 32 + 2 = 106
+
+total: 8 + 8 + 8 + 8 + 2 = 34
+
+"""
+
+
+def msg_def(msg_cls, *args, **kwargs):
+    user_msg_defs[msg_cls.uid()] = msg_cls
+    return msg_cls
+
+
+def core_def(msg_cls, *args, **kwargs):
+    core_msg_defs[msg_cls.uid()] = msg_cls
+    return msg_cls
+
+
+valid_chars = []
+valid_chars.extend(string.digits)
+valid_chars.extend(string.ascii_letters)
+valid_chars.extend(["_"])
+value = {c: i for i, c in enumerate(valid_chars)}
+
+
+@lru_cache(maxsize=128)
+def hash_string(s: str) -> int:
+    h = 0
+
+    for c in reversed(s):
+        h = h * 31 + value[c]
+
+    return h % 0xFFFFFFFFFFFFFFFF
+
+
 class MessageHeader(ctypes.Structure):
     _fields_ = [
-        ("msg_type", ctypes.c_int),
-        ("msg_count", ctypes.c_int),
-        ("send_time", ctypes.c_double),
-        ("recv_time", ctypes.c_double),
-        ("src_host_id", HOST_ID),
-        ("src_mod_id", MODULE_ID),
-        ("dest_host_id", HOST_ID),
-        ("dest_mod_id", MODULE_ID),
-        ("num_data_bytes", ctypes.c_int),
-        ("remaining_bytes", ctypes.c_int),
-        ("is_dynamic", ctypes.c_int),
-        ("reserved", ctypes.c_int),
+        ("timestamp", ctypes.c_double),
+        ("src_uid", ctypes.c_uint64),
+        ("dest_uid", ctypes.c_uint64),
+        ("msg_uid", ctypes.c_uint64),
+        ("num_bytes", ctypes.c_uint16),
+        ("options", ctypes.c_uint16),
     ]
 
     @property
@@ -132,10 +168,6 @@ class MessageHeader(ctypes.Structure):
             str += f"\n" + "\t" * (add_tabs + 1) + f"{field_name} = ({class_name}){val}"
         return str
 
-    @property
-    def get_data(self) -> Type[MessageData]:
-        return msg_defs[self.msg_type]
-
 
 class TimeCodeMessageHeader(MessageHeader):
     _fields_ = [
@@ -157,159 +189,75 @@ class Message:
     data: MessageData
 
     @property
-    def type_id(self) -> int:
-        return self.data.type_id
+    def uid(self) -> int:
+        return self.data.uid()
 
     @property
     def name(self) -> str:
-        return self.data.type_name
-    
+        return self.data._name
+
     # custom print for message data
     def pretty_print(self, add_tabs=0):
-        return self.header.pretty_print(add_tabs) + "\n" + self.data.pretty_print(add_tabs)
+        return (
+            self.header.pretty_print(add_tabs) + "\n" + self.data.pretty_print(add_tabs)
+        )
 
 
 # START OF LSB INTERNAL MESSAGE DEFINITIONS
-class EXIT(MessageData):
-    type_id: ClassVar[int] = MT_EXIT
-    type_name: ClassVar[str] = "EXIT"
 
 
-core_msg_defs[MT_EXIT] = EXIT
-
-
-class KILL(MessageData):
-    type_id: ClassVar[int] = MT_KILL
-    type_name: ClassVar[str] = "KILL"
-
-
-core_msg_defs[MT_KILL] = KILL
-
-
-class ACKNOWLEDGE(MessageData):
-    type_id: ClassVar[int] = MT_ACKNOWLEDGE
-    type_name: ClassVar[str] = "ACKNOWLEDGE"
-
-
-core_msg_defs[MT_ACKNOWLEDGE] = ACKNOWLEDGE
-
-
+@core_def
 class CONNECT(MessageData):
-    _fields_ = [("logger_status", ctypes.c_short), ("daemon_status", ctypes.c_short)]
-    type_id: ClassVar[int] = MT_CONNECT
-    type_name: ClassVar[str] = "CONNECT"
+    _fields_ = [
+        ("client_name", ctypes.c_char * 32),
+        ("pid", ctypes.c_int),
+    ]
+    _name: ClassVar[str] = "CONNECT"
 
 
-core_msg_defs[MT_CONNECT] = CONNECT
+@core_def
+class DISCONNECT(MessageData):
+    _name: ClassVar[str] = "DISCONNECT"
 
 
+@core_def
+class CONNECT_ACK(MessageData):
+    _fields_ = [("client_name", ctypes.c_char * 32), ("client_uid", ctypes.c_uint64)]
+    _name: ClassVar[str] = "CONNECT_ACK"
+
+
+@core_def
 class SUBSCRIBE(MessageData):
-    _fields_ = [("msg_type", MSG_TYPE)]
-    type_id: ClassVar[int] = MT_SUBSCRIBE
-    type_name: ClassVar[str] = "SUBSCRIBE"
+    _fields_ = [("msg_name", ctypes.c_char * 32)]
+    _name: ClassVar[str] = "SUBSCRIBE"
 
 
-core_msg_defs[MT_SUBSCRIBE] = SUBSCRIBE
-
-
+@core_def
 class UNSUBSCRIBE(MessageData):
-    _fields_ = [("msg_type", MSG_TYPE)]
-    type_id: ClassVar[int] = MT_UNSUBSCRIBE
-    type_name: ClassVar[str] = "UNSUBSCRIBE"
+    _fields_ = [("msg_name", ctypes.c_char * 32)]
+    _name: ClassVar[str] = "UNSUBSCRIBE"
 
 
-core_msg_defs[MT_UNSUBSCRIBE] = UNSUBSCRIBE
-
-
-class PAUSE_SUBSCRIPTION(MessageData):
-    _fields_ = [("msg_type", MSG_TYPE)]
-    type_id: ClassVar[int] = MT_PAUSE_SUBSCRIPTION
-    type_name: ClassVar[str] = "PAUSE_SUBSCRIPTION"
-
-
-core_msg_defs[MT_PAUSE_SUBSCRIPTION] = PAUSE_SUBSCRIPTION
-
-
-class RESUME_SUBSCRIPTION(MessageData):
-    _fields_ = [("msg_type", MSG_TYPE)]
-    type_id: ClassVar[int] = MT_RESUME_SUBSCRIPTION
-    type_name: ClassVar[str] = "RESUME_SUBSCRIPTION"
-
-
-core_msg_defs[MT_RESUME_SUBSCRIPTION] = RESUME_SUBSCRIPTION
-
-
-class FAIL_SUBSCRIBE(MessageData):
+@core_def
+class SUBSCRIBE_ACK(MessageData):
     _fields_ = [
-        ("mod_id", MODULE_ID),
-        ("reserved", ctypes.c_short),
-        ("msg_type", MSG_TYPE),
+        ("msg_name", ctypes.c_char * 32),
+        ("msg_uid", ctypes.c_uint16),
+        ("success", ctypes.c_bool),
     ]
-    type_id: ClassVar[int] = MT_FAIL_SUBSCRIBE
-    type_name: ClassVar[str] = "FAIL_SUBSCRIBE"
+    _name: ClassVar[str] = "SUBSCRIBE_ACK"
 
 
-core_msg_defs[MT_FAIL_SUBSCRIBE] = FAIL_SUBSCRIBE
-
-
-class FAILED_MESSAGE(MessageData):
+@core_def
+class UNSUBSCRIBE_ACK(MessageData):
     _fields_ = [
-        ("dest_mod_id", MODULE_ID),
-        ("reserved", ctypes.c_short * 3),
-        ("time_of_failure", ctypes.c_double),
-        ("msg_header", MessageHeader),
+        ("msg_name", ctypes.c_char * 32),
+        ("msg_uid", ctypes.c_uint16),
+        ("success", ctypes.c_bool),
     ]
-    type_id: ClassVar[int] = MT_FAILED_MESSAGE
-    type_name: ClassVar[str] = "FAILED_MESSAGE"
+    _name: ClassVar[str] = "UNSUBSCRIBE_ACK"
 
 
-core_msg_defs[MT_FAILED_MESSAGE] = FAILED_MESSAGE
-
-
-class FORCE_DISCONNECT(MessageData):
-    _fields_ = [("mod_id", ctypes.c_int)]
-    type_id: ClassVar[int] = MT_FORCE_DISCONNECT
-    type_name: ClassVar[str] = "FORCE_DISCONNECT"
-
-
-core_msg_defs[MT_FORCE_DISCONNECT] = FORCE_DISCONNECT
-
-
-class MODULE_READY(MessageData):
-    _fields_ = [("pid", ctypes.c_int)]
-    type_id: ClassVar[int] = MT_MODULE_READY
-    type_name: ClassVar[str] = "MODULE_READY"
-
-
-core_msg_defs[MT_MODULE_READY] = MODULE_READY
-
-
-class SAVE_MESSAGE_LOG(MessageData):
-    _fields_ = [
-        ("pathname", ctypes.c_char * MAX_LOGGER_FILENAME_LENGTH),
-        ("pathname_length", ctypes.c_int),
-    ]
-    type_id: ClassVar[int] = MT_SAVE_MESSAGE_LOG
-    type_name: ClassVar[str] = "SAVE_MESSAGE_LOG"
-
-
-core_msg_defs[MT_SAVE_MESSAGE_LOG] = SAVE_MESSAGE_LOG
-
-
-class TIMING_MESSAGE(MessageData):
-    _fields_ = [
-        ("timing", ctypes.c_ushort * MAX_MESSAGE_TYPES),
-        ("ModulePID", ctypes.c_int * MAX_MODULES),
-        ("send_time", ctypes.c_double),
-    ]
-    type_id: ClassVar[int] = MT_TIMING_MESSAGE
-    type_name: ClassVar[str] = "TIMING_MESSAGE"
-
-
-core_msg_defs[MT_TIMING_MESSAGE] = TIMING_MESSAGE
-
-
-def AddMessage(msg_type_id: int, msg_cls: Type[MessageData]):
-    """Add a user message definition to the LSB module"""
-    msg_defs.maps[1][msg_type_id] = msg_cls
-
+@core_def
+class EXIT(MessageData):
+    _name: ClassVar[str] = "EXIT"

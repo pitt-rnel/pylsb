@@ -97,35 +97,23 @@ class MessageData(ctypes.Structure):
             )
 
 
-"""
-to: char[32]
-from: char[32]
-timestamp: double
-subject: char[32]
-size: uint16
-
-total: 32 + 32 + 8 + 32 + 2 = 106
-
-total: 8 + 8 + 8 + 8 + 2 = 34
-
-"""
-
-
 def msg_def(msg_cls, *args, **kwargs):
+    """Decorator to add user message definitions."""
     user_msg_defs[msg_cls.uid()] = msg_cls
     return msg_cls
 
 
 def core_def(msg_cls, *args, **kwargs):
+    """Decorator to add core message definitions."""
     core_msg_defs[msg_cls.uid()] = msg_cls
     return msg_cls
 
 
-valid_chars = []
-valid_chars.extend(string.digits)
-valid_chars.extend(string.ascii_letters)
-valid_chars.extend(["_"])
-value = {c: i for i, c in enumerate(valid_chars)}
+_valid_chars = []
+_valid_chars.extend(string.digits)
+_valid_chars.extend(string.ascii_letters)
+_valid_chars.extend(["_"])
+_char_to_value = {c: i for i, c in enumerate(_valid_chars)}
 
 
 @lru_cache(maxsize=128)
@@ -133,7 +121,7 @@ def hash_string(s: str) -> int:
     h = 0
 
     for c in reversed(s):
-        h = h * 31 + value[c]
+        h = h * 31 + _char_to_value[c]
 
     return h % 0xFFFFFFFFFFFFFFFF
 

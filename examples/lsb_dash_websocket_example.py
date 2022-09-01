@@ -6,14 +6,6 @@ import pylsb, ctypes, threading, time, sys
 MT_SINE_STOP = 9001
 MT_SINE_START = 9002
 
-class SINE_STOP(pylsb.MessageData):
-    type_id: int = MT_SINE_STOP
-    type_name: str = "SINE_STOP"
-
-class SINE_START(pylsb.MessageData):
-    type_id: int = MT_SINE_START
-    type_name: str = "SINE_START"
-
 # instantiate client globally
 mod = pylsb.Client()
 

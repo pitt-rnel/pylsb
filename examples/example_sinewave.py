@@ -6,6 +6,8 @@ import pylsb
 
 # Choose a unique message type id number
 MT_SINE_TEST_MSG = 9000
+MT_SINE_STOP = 9001
+MT_SINE_START = 9002
 
 # Create a user defined message from a ctypes.Structure or basic ctypes
 class SINE_TEST_MSG(pylsb.MessageData):
@@ -17,9 +19,19 @@ class SINE_TEST_MSG(pylsb.MessageData):
     def __str__(self):
         return self.pretty_print()
 
+class SINE_STOP(pylsb.MessageData):
+    type_id: int = MT_SINE_STOP
+    type_name: str = "SINE_STOP"
+
+class SINE_START(pylsb.MessageData):
+    type_id: int = MT_SINE_START
+    type_name: str = "SINE_START"
+
 
 # Add the message definition to the pylsb module
 pylsb.AddMessage(MT_SINE_TEST_MSG, msg_cls=SINE_TEST_MSG)
+pylsb.AddMessage(MT_SINE_STOP, msg_cls=SINE_STOP)
+pylsb.AddMessage(MT_SINE_START, msg_cls=SINE_START)
 
 
 def publisher(server="127.0.0.1:7111", timecode=False):
@@ -27,8 +39,11 @@ def publisher(server="127.0.0.1:7111", timecode=False):
     mod = pylsb.Client(timecode=timecode)
     mod.connect(server_name=server)
 
+    # Select the messages to receive
+    mod.subscribe([MT_SINE_STOP, MT_SINE_START, pylsb.MT_EXIT])
+
     # Build a packet to send
-    msg = SINE_TEST_MSG()
+    sin_msg = SINE_TEST_MSG()
     # sine params
     A = 1  # sine amplitude
     f = 2  # sine frequency
@@ -36,13 +51,31 @@ def publisher(server="127.0.0.1:7111", timecode=False):
     w = 2 * math.pi * f  # omega = 2*pi*f
 
     t0 = time.time()  # init timer
+    pause_t0 = time.time()
+    run = True
     while True:
         try:
             # calculate and send sine value
-            msg.time = time.time() - t0
-            msg.value = A * math.sin(w * msg.time + phase)
-            mod.send_message(msg)
-            time.sleep(0.02)
+            if run:
+                t = time.time() - t0
+                sin_msg.time = t
+                sin_msg.value = A * math.sin(w * t + phase)
+                mod.send_message(sin_msg)
+            msg = mod.read_message(timeout=0.020)
+            if msg is not None:
+                if msg.name == "SINE_STOP":
+                    if run:
+                        pause_t0 = time.time()
+                        run = False
+                        print("Stopping")
+                elif msg.name == "SINE_START":
+                    if not run:
+                        t0 += time.time() - pause_t0
+                        run = True
+                        print("Starting")
+                elif msg.name == "EXIT":
+                    print("Goodbye")
+                    break
         except KeyboardInterrupt:
             mod.send_signal(pylsb.MT_EXIT)
             print("Goodbye")

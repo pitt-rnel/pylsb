@@ -192,8 +192,8 @@ class Client(object):
                 name = msg_type._name
             else:
                 RuntimeError("Invalid args to subscribe.")
-            if len(name) > 32:
-                print(f"Skipping: Name exceeds 32 chars: {name}")
+            if len(name) > MAX_NAME_LEN:
+                print(f"Name exceeds {MAX_NAME_LEN} chars: Skipping {name}")
                 continue
             msg.msg_name = name.encode()
             self.send_message(msg)

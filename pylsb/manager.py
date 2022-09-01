@@ -51,8 +51,10 @@ class MessageManager:
 
         if ip_address == socket.INADDR_ANY:
             self.ip_address = ""  # bind and Module require a string input, '' is treated as INADDR_ANY by bind
-        else:
+        elif isinstance(ip_address, str):
             self.ip_address = ip_address
+        else:
+            raise TypeError("Invalid argument type for ip address.")
 
         self.port = port
 
@@ -96,7 +98,7 @@ class MessageManager:
         # Add message manager to its module list
         self.mm_client = _Client(
             conn=self.listen_socket,
-            address=(ip_address, port),
+            address=(self.ip_address, port),
             header_cls=self.header_cls,
             uid=0,
             pid=os.getpid(),

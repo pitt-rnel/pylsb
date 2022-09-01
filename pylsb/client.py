@@ -75,15 +75,13 @@ def requires_connection(func):
 
 
 class Client(object):
-    def __init__(
-        self, name: str, timecode: bool = False,
-    ):
+    def __init__(self, name: str, header_cls: Type[MessageHeader] = MessageHeader):
         self._uid = hash_string(name)
         self.name = name
         self._msg_count = 0
         self._server = ("", -1)
         self._connected = False
-        self._header_cls = get_header_cls(timecode)
+        self._header_cls = header_cls
         self._recv_buffer = bytearray(1024 ** 2)
         self._pid = os.getpid()
         self._subs = set()
@@ -186,15 +184,18 @@ class Client(object):
 
         msg = SUBSCRIBE()
         for msg_type in msg_list:
-            if type(msg_type) is str:
+            if isinstance(msg_type, str):
                 name = msg_type
             elif issubclass(msg_type, MessageData):
                 name = msg_type._name
             else:
-                RuntimeError("Invalid args to subscribe.")
+                raise RuntimeError("Invalid args to subscribe.")
+
+            # Length Check
             if len(name) > MAX_NAME_LEN:
                 print(f"Name exceeds {MAX_NAME_LEN} chars: Skipping {name}")
                 continue
+
             msg.msg_name = name.encode()
             self.send_message(msg)
 
@@ -205,7 +206,7 @@ class Client(object):
 
         msg = UNSUBSCRIBE()
         for msg_type in msg_list:
-            if type(msg_type) is str:
+            if isinstance(msg_type, str):
                 msg.msg_name = msg_type.encode()
             elif issubclass(msg_type, MessageData):
                 msg.msg_name = msg_type._name.encode()
@@ -242,7 +243,7 @@ class Client(object):
             # Socket was not ready to receive data. Drop the packet.
             print("x", end="")
 
-    def _sendall(self, buffer: bytearray):
+    def _sendall(self, buffer: Union[MessageHeader, MessageData, bytearray]):
         try:
             self._sock.sendall(buffer)
         except ConnectionError as e:

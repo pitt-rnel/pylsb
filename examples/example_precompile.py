@@ -16,9 +16,9 @@ import pylsb
 from rnel_msg_defs import *
 
 
-def publisher(server="127.0.0.1:7111", timecode=False):
+def publisher(server="127.0.0.1:7111"):
     # Setup Client
-    mod = pylsb.Client(name="pub_test", timecode=timecode)
+    mod = pylsb.Client(name="pub_test")
     mod.connect(server_name=server)
 
     for msg_uid, msg_cls in pylsb.user_msg_defs.items():
@@ -30,9 +30,9 @@ def publisher(server="127.0.0.1:7111", timecode=False):
     print("Goodbye")
 
 
-def subscriber(server="127.0.0.1:7111", timecode=False):
+def subscriber(server="127.0.0.1:7111"):
     # Setup Client
-    mod = pylsb.Client(name="sub_test", timecode=timecode)
+    mod = pylsb.Client(name="sub_test")
     mod.connect(server_name=server)
 
     # Select the messages to receive
@@ -64,9 +64,6 @@ if __name__ == "__main__":
     parser.add_argument(
         "--server", default="127.0.0.1:7111", help="LSB Message Manager ip address."
     )
-    parser.add_argument(
-        "-t", "--timecode", action="store_true", help="Use timecode in message header"
-    )
     group = parser.add_mutually_exclusive_group()
     group.add_argument(
         "--pub", default=False, action="store_true", help="Run as publisher."
@@ -79,9 +76,9 @@ if __name__ == "__main__":
 
     if args.pub:
         print("pylsb Publisher")
-        publisher(args.server, timecode=args.timecode)
+        publisher(args.server)
     elif args.sub:
         print("pylsb Subscriber")
-        subscriber(args.server, timecode=args.timecode)
+        subscriber(args.server)
     else:
         print("Unknown input")

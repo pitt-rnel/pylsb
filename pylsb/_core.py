@@ -167,13 +167,6 @@ class TimeCodeMessageHeader(MessageHeader):
     ]
 
 
-def get_header_cls(timecode: bool = False) -> Type[MessageHeader]:
-    if timecode:
-        return TimeCodeMessageHeader
-    else:
-        return MessageHeader
-
-
 @dataclass
 class Message:
     header: MessageHeader

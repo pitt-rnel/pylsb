@@ -45,9 +45,8 @@ class MessageManager:
         self,
         ip_address: Union[str, int] = socket.INADDR_ANY,
         port: int = 7111,
-        timecode=False,
+        header_cls: Type[MessageHeader] = MessageHeader,
         debug=False,
-        send_msg_timing=True,
     ):
 
         if ip_address == socket.INADDR_ANY:
@@ -57,7 +56,7 @@ class MessageManager:
 
         self.port = port
 
-        self.header_cls = get_header_cls(timecode)
+        self.header_cls = header_cls
         self.header_size = ctypes.sizeof(self.header_cls)
         self.header_buffer = bytearray(self.header_size)
         self.header_view = memoryview(self.header_buffer)
@@ -65,8 +64,9 @@ class MessageManager:
         self.read_timeout = 0.200
         self.write_timeout = 0
         self._debug = debug
-        self.b_send_msg_timing = send_msg_timing
+
         self.logger = logging.getLogger(f"MessageManager@{ip_address}:{port}")
+
         self.console_log_level = (
             logging.INFO
         )  # should eventually change this to WARNING or INFO. Could also tie to _debug property
@@ -374,15 +374,6 @@ if __name__ == "__main__":
         "-p", "--port", type=int, default=7111, help="Listener port. Default is 7111."
     )
     parser.add_argument("-d", "--debug", action="store_true", help="Debug mode")
-    parser.add_argument(
-        "-t", "--timecode", action="store_true", help="Use timecode in message header"
-    )
-    parser.add_argument(
-        "-T",
-        "--disable_timing_msg",
-        action="store_true",
-        help="Disable sending of TIMING_MESSAGE",
-    )
     args = parser.parse_args()
 
     if args.addr:  # a non-empty host address was passed in.
@@ -390,12 +381,6 @@ if __name__ == "__main__":
     else:
         ip_addr = socket.INADDR_ANY
 
-    msg_mgr = MessageManager(
-        ip_address=ip_addr,
-        port=args.port,
-        timecode=args.timecode,
-        debug=args.debug,
-        send_msg_timing=(not args.disable_timing_msg),
-    )
+    msg_mgr = MessageManager(ip_address=ip_addr, port=args.port, debug=args.debug,)
 
     msg_mgr.run()

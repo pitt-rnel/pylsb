@@ -6,7 +6,6 @@ from ._core import (
     core_msg_defs,
     msg_defs,
     hash_string,
-    get_header_cls,
     msg_def,
     EXIT,
 )

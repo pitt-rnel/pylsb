@@ -61,7 +61,7 @@ def publisher(server="127.0.0.1:7111", timecode=False):
                 sin_msg.time = t
                 sin_msg.value = A * math.sin(w * t + phase)
                 mod.send_message(sin_msg)
-            msg = mod.read_message(timeout=0.020)
+            msg = mod.read_message(timeout=0)
             if msg is not None:
                 if msg.name == "SINE_STOP":
                     if run:
@@ -76,6 +76,7 @@ def publisher(server="127.0.0.1:7111", timecode=False):
                 elif msg.name == "EXIT":
                     print("Goodbye")
                     break
+            time.sleep(0.02)
         except KeyboardInterrupt:
             mod.send_signal(pylsb.MT_EXIT)
             print("Goodbye")

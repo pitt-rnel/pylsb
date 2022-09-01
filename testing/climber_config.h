@@ -10,6 +10,7 @@
 // Default address of the message manager
 #define DEFAULT_MM_IP "localhost:7111"
 
+#define MAX_LOGGER_FILENAME_LENGTH 256
 #define MAX_SPIKE_SOURCES 2
 #define MAX_SPIKE_SOURCES_N256 1 // single 256 neuroport used in Chicago
 #define MAX_SPIKE_CHANS_PER_SOURCE 128
@@ -81,278 +82,6 @@
 #define NUM_SERVOS 4
 #define NUM_DYNAMIXEL NUM_SERVOS
 
-//
-// Module ID-s PLEASE KEEP MIDs IN ASCENDING ORDER, DO NOT DUPLICATE, AND STAY WITHIN RANGE 10-99!
-//
-#define MID_JSTICK_COMMAND 10
-#define MID_COMBINER 11
-#define MID_CEREBUS 12 //DO NOT ADD ANYTHING BETWEEN 12 and 20! the cerebus module adds nsp_index to this to maintain unique numbers
-
-#define MID_INPUT_TRANSFORM 20
-#define MID_RPPL_RECORD 21
-#define MID_CENTRAL 22 //DO NOT ADD ANYTHING BETWEEN 22 and 30! the NSPCentralControl module adds nsp_index to this to maintain unique numbers
-
-#define MID_EXTRACTION 30 // retired MID_LFPEEXTRACTION (31), MID_CREATEBUFFER (35)
-#define MID_MYO 31
-
-#define MID_MPL_CONTROL 40
-#define MID_GRIP_CONTROL 41
-
-//DEKA MIDS
-#define MID_DEKA_CAN_MODULE 42
-#define MID_DEKA_ACI_RESPONSE 43
-#define MID_DEKA_DISPLAY 44 // previously: 47
-// NREC WAM IDS (RETIRED, CAN REUSE)
-//#define MID_NREC_WAM_RECV	    	44
-// #define MID_NREC_WAM_SEND		45
-#define MID_PSYCHTLBX 46
-//2018-08-23 Royston: working on PsychoPy-RTMA integration, added a module for testing
-#define MID_STIM_PRESENT 48
-
-#define MID_ACTIVE_ASSIST 50
-// KUKA MIDS
-#define MID_KUKA_DISPLAY 51
-#define MID_ROBOTICS_FEEDBACK_INTEGRATOR 52
-#define MID_KUKA_INTERFACE_MODULE	53
-#define MID_KUKA_JOINT_COMMAND_DISPLAY   54
-#define MID_KUKA_DIAGNOSTICS		55
-#define MID_TASKA_DRIVER            56
-//
-#define MID_FORCE_PLATFORM 58
-#define MID_FORCE_PLATFORM_DISPLAY 59
-
-#define MID_MPL_FEEDBACK 60
-//#define MID_MUJOCO_VR_MODULE      61 // MujocoVR C++ Module // def moved to mjvr_types.h
-#define MID_AJA_CONTROL 65	// python module to control Aja Ki Pro Mini video recorder
-#define MID_SEAIOCONTROL 66 // module to send digital high/low from SeaIO card in stim computer
-
-#define MID_EXECUTIVE 70
-#define MID_COMMENT_MANAGER 71
-
-#define MID_FLIP_THAT_BUCKET_MESSENGER 74
-
-#define MID_VOLTAGE_MONITOR_GUI 76
-#define MID_VOLTAGE_MONITOR 77
-#define MID_ATIsensor 78
-
-// RETIRED MID_GENERIC (80) REPLACED WITH DYNAMIC MID 0. Also retired MID_VISUALATION (82), MID_VIDEO_LOGGER (83), MID_AUDIO_LOGGER (84), MID_DATAGLOVE_CONTROL (85)
-#define MID_MESSAGERATES 81 // Diagnostic module (USED BY LOADER)
-#define MID_VISUAL_GRATING 85
-#define MID_BIASMODULE 86
-#define MID_CURSOR 87
-// RIGHT HAND GRIPPER Modules
-#define MID_RHR_COMMAND_MODULE 88
-#define MID_RHR_SENSOR_MODULE 89
-
-#define MID_SOUNDPLAYER 90 // retired MID_KNOB_FEEDBACK (94), MID_APLSENDER (98), MID_APLRECEIVER (99)
-#define MID_RFDISPLAY 91
-#define MID_RFACTIVITY 92
-#define MID_ImageDisplayer 93
-
-// Predict movement intent
-#define MID_FLIP_THAT_BUCKET 94
-
-// Stim MIDs
-#define MID_STIM_SAFETY_MODULE 95
-#define MID_SENSOR_STIM_TRANS_MODULE 96
-#define MID_CERESTIM_CONTROL 97
-#define MID_SENSE_TOUCH_INTERFACE 98
-#define MID_SENSOR_STIM_TRANSFORM_PY 99
-
-// Module ID
-#define MID_MECH_STIM_MODULE 0
-
-//
-// Message ID-s THERE IS NO REASON THESE NEED TO START AT 1700, values > 99 are allowed
-//
-#define MT_FINISHED_COMMAND 1700
-#define MT_CONTROL_SPACE_FEEDBACK 1701
-#define MT_CONTROL_SPACE_COMMAND 1702
-#define MT_MPL_RAW_PERCEPT 1703
-#define MT_BIAS_COMMAND 1704
-#define MT_MPL_REBIASED_SENSORDATA 1705
-#define MT_CONTROL_SPACE_FEEDBACK_RHR_GRIPPER 1706
-#define MT_CONTROL_SPACE_POS_COMMAND 1710
-#define MT_MPL_SEGMENT_PERCEPTS 1711
-#define MT_WAM_FEEDBACK 1712
-#define MT_IMPEDANCE_COMMAND 1713
-#define MT_EXECUTIVE_CTRL 1714
-
-#define MT_CURSOR_FEEDBACK 1720
-#define MT_VISUAL_GRATING_BUILD 1721
-#define MT_VISUAL_GRATING_RESPONSE 1722
-
-#define MT_GRIP_COMMAND 1730
-#define MT_GRIP_FINISHED_COMMAND 1731
-#define MT_GRIPPER_FEEDBACK 1732
-#define MT_MUJOCO_SENSOR 1733
-#define MT_MUJOCO_CMD 1734
-#define MT_MUJOCO_MOVE 1735
-#define MT_MUJOCO_MSG 1736
-#define MT_MUJOCO_GHOST_COLOR 1737
-#define MT_MUJOCO_OBJMOVE 1738
-#define MT_OPENHAND_CMD 1740
-#define MT_OPENHAND_SENS 1741
-#define MT_PRENSILIA_SENS 1742
-#define MT_PRENSILIA_CMD 1743
-#define MT_TABLE_LOAD_CELLS 1744
-#define MT_REZERO_GRIPPER_SENSORS 1745
-
-#define MT_SINGLETACT_DATA 1760
-
-#define MT_RAW_SPIKECOUNT 1800
-#define MT_SPM_SPIKECOUNT 1801
-#define MT_SPIKE_SNIPPET 1802
-#define MT_RAW_CTSDATA 1803
-#define MT_SPM_CTSDATA 1804
-#define MT_REJECTED_SNIPPET 1805
-#define MT_RAW_DIGITAL_EVENT 1806
-#define MT_SPM_DIGITAL_EVENT 1807
-#define MT_STIM_SYNC_EVENT 1808 // special type of digital event
-#define MT_STIM_UPDATE_EVENT 1809
-#define MT_CENTRALRECORD 1810
-#define MT_RAW_ANALOGDATA 1811
-#define MT_SPM_ANALOGDATA 1812
-#define MT_RAW_SPIKECOUNT_N256 1815
-#define MT_RAW_CTSDATA_N256 1816
-#define MT_SAMPLE_GENERATED 1820
-#define MT_XIPP_EMG_DATA_RAW 1830
-#define MT_MYO_EMG_DATA 1831 // myo band emg
-#define MT_MYO_KIN_DATA 1832 // myo band kinematics
-
-#define MT_INPUT_DOF_DATA 1850
-#define MT_DATAGLOVE 1860
-#define MT_OPTITRACK_RIGID_BODY 1861
-
-#define MT_TASK_STATE_CONFIG 1900
-#define MT_PHASE_RESULT 1901
-#define MT_EXTRACTION_RESPONSE 1902
-#define MT_NORMALIZATION_FACTOR 1903
-#define MT_TRIAL_METADATA 1904
-#define MT_EXTRACTION_REQUEST 1905 // signal to request an extraction response
-#define MT_UPDATE_UNIT_STATE 1906
-#define MT_DISABLED_UNITS 1907
-#define MT_TRIAL_END 1910			  // signal at end of trial_num
-#define MT_REP_START 1911			  // msg at beginning of rep w/ rep num (added for communication between open-loop stim and touch interface)
-#define MT_REP_END 1912				  // signal at rep end
-#define MT_EXEC_SCORE 1913			  // success/failure
-#define MT_FLIP_THAT_BUCKET_DATA 1914 // communicate stimulus updates and participant responses within the Flip That Bucket game
-
-#define MT_EM_ADAPT_NOW 2000
-#define MT_EM_CONFIGURATION 2001
-#define MT_TDMS_CREATE 2002
-#define MT_RF_REPORT 2003
-#define MT_PICDISPLAY 2004
-#define MT_STIMDATA 2005
-//#define MT_KNOB_FEEDBACK 		  2006
-#define MT_SEAIO_OUT 2007
-#define MT_ATIforcesensor 2008
-#define MT_TACTOR_CMD 2009 // signal to trigger vibrotactor(s)
-#define MT_HSTLOG 3000
-//#define MT_TFD					  3001 //Time-Frequency Data for visualization (so that processing can still be done in Extraction Module)
-
-#define MT_PLAYSOUND 3100
-#define MT_PLAYVIDEO 3102
-#define MT_START_TIMED_RECORDING 3101
-
-#define MT_AJA_CONFIG 3200
-#define MT_AJA_TIMECODE 3201
-#define MT_AJA_STATUS 3202
-#define MT_AJA_STATUS_REQUEST 3203
-
-// FLIGHT SIM
-//#define MT_APLC			 	  3500
-
-// stim message IDs
-#define MT_CERESTIM_CONFIG_MODULE 4000
-#define MT_CERESTIM_CONFIG_CHAN_PRESAFETY 4001
-#define MT_CERESTIM_CONFIG_CHAN 4002
-#define MT_CERESTIM_ERROR 4003
-#define MT_CERESTIM_ALIVE 4004
-#define MT_CS_TRAIN_END 4005							 // sent when an (open-loop) pulse-train has ended
-#define MT_CERESTIM_CONFIG_CHAN_PRESAFETY_ARBITRARY 4006 //NEW MESSAGE TYPE FOR ARBITRARY PULSE TIMINGS
-#define MT_CERESTIM_CONFIG_CHAN_ARBITRARY 4007			 //NEW MESSAGE TYPE FOR ARBITRARY PULSE TIMINGS
-#define MT_CS_ARBITRARY_CLOSE 4008						 //for closing arbitrary pulse timings when config is wrong
-#define MT_STIM_VOLTAGE_MONITOR_DATA 4009
-#define MT_STIM_VOLTAGE_MONITOR_DIGITAL_DATA 4010
-#define MT_VOLTAGE_MONITOR_STATUS 4011
-#define MT_STIM_DUTYCYCLE_TIME 4012
-#define	MT_STIM_TRIAL_DURATION 4013
-
-// stim touch interface IDs
-// USER RESPONSES:  ACN 2/10
-// quality
-#define MT_NATURAL_RESPONSE 4050
-#define MT_DEPTH_RESPONSE 4051
-#define MT_PAIN_RESPONSE 4052
-// modality
-#define MT_MODALITY_TOGGLE 4053
-#define MT_MECH_RESPONSE 4054
-#define MT_MECH_INTENSITY_RESPONSE 4055
-#define MT_MOVE_RESPONSE 4056
-#define MT_MOVE_INTENSITY_RESPONSE 4057
-#define MT_TINGLE_RESPONSE 4058
-#define MT_TINGLE_INTENSITY_RESPONSE 4059
-#define MT_TEMP_RESPONSE 4060
-#define MT_DIR_PIXEL_COORDS 4061
-#define MT_PIXEL_COORDS 4063  // canvas drawing
-#define MT_CLEAR_LINE 4064	  // clear current sensation
-#define MT_ADD_SENSATION 4065 // add sensation
-#define MT_SLIDER_DATA 4066	  //From palette sliders
-
-// realtime control of stimulation parameters
-#define MT_USER_DEFINED_STIM 4067
-#define MT_USER_BEHAVIOUR 4068
-#define MT_STOP_STIM 4069
-#define MT_PAUSE_TRIAL 4070
-
-// misc messages IDs
-#define MT_CST_LAMBDA 4100 // message to log lambda value in cst task
-#define MT_CST_SETTINGS 4101
-
-//  toolbox IDs
-#define MT_STIM_PRES_CONFIG 4150
-#define MT_STIM_PRES_PHASE_END 4151
-#define MT_STIM_PRESENT 4152
-#define MT_STIM_PRES_STATUS 4153
-#define MT_STIM_CONFIG_TYPE 4154
-
-//Deka SC Arm Messages
-#define MT_DEKA_ACI_RESPONSE 4200
-#define MT_DEKA_SENSOR 4201
-#define MT_DEKA_CAN_TOGGLE 4202
-#define MT_DEKA_CAN_GRIP_TOGGLE 4203
-#define MT_DEKA_CAN_EXIT 4204
-//Deka Luke Hand Messages
-#define MT_DEKA_HAND_SENSOR 4205
-#define MT_DEKA_HAND_JSTICK_CMD 4206
-//Right Hand Robotics Messages
-#define MT_RH_GRIPPER_SENSOR 4207
-//KUKA Messages
-#define MT_KUKA_JOINT_COMMAND			4208
-#define MT_KUKA_FEEDBACK				4209
-#define MT_KUKA_EXIT                    4210
-#define MT_KUKA_PTP_JOINT				4211
-#define MT_KUKA_DEBUG					4212
-// Taska
-#define MT_TASKA_CMD					4250
-#define MT_TASKA_REPLY					4251
-#define MT_TASKA_ERROR					4252
-
-// MujocoVR C++ Messages
-// moved to mjvr_types.h
-// MT 4213-4232 in use (as of 2020-06-08)
-
-//Mechanical Indenter Messages
-#define MT_MECH_STIM_CONFIGURE 4240
-#define MT_MECH_STIM_RESET 4241
-#define MT_MECH_STIM_STAGE 4242
-#define MT_MECH_STIM_WAITING 4243
-#define MT_MECH_STIM_TRIGGER 4244
-#define MT_MECH_STIM_CANCEL 4245
-#define MT_MECH_STIM_DONE 4246
-#define MT_MECH_STIM_ERROR 4247
-
 #define DEKA_DOF_COUNT 7
 #define KUKA_DOF_COUNT 7
 
@@ -374,6 +103,18 @@
 //
 // MDF DEFINTIONS AND OTHER TYPEDEFS
 //
+
+typedef void MDF_EXTRACTION_REQUEST;
+typedef void MDF_TRIAL_END;
+typedef void MDF_REP_END;
+typedef void MDF_CLEAR_LINE;
+typedef void MDF_MECH_STIM_RESET;
+typedef void MDF_MECH_STIM_STAGE;
+typedef void MDF_MECH_STIM_WAITING;
+typedef void MDF_MECH_STIM_TRIGGER;
+typedef void MDF_MECH_STIM_CANCEL;
+typedef void MDF_MECH_STIM_DONE;
+
 typedef struct
 {
 	int serial_no;

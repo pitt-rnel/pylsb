@@ -9,6 +9,7 @@ import pylsb
 MT_USER_MESSAGE = 1234
 
 # Create a user defined message from a ctypes.Structure or basic ctypes
+@pylsb.msg_def
 class USER_MESSAGE(pylsb.MessageData):
     _fields_ = [
         ("str", ctypes.c_byte * 64),
@@ -18,13 +19,6 @@ class USER_MESSAGE(pylsb.MessageData):
 
     type_id: int = MT_USER_MESSAGE
     type_name: str = "USER_MESSAGE"
-
-    def __str__(self):
-        return self.pretty_print()
-
-
-# Add the message definition to the pylsb module
-pylsb.AddMessage(MT_USER_MESSAGE, msg_cls=USER_MESSAGE)
 
 
 def publisher(server="127.0.0.1:7111", timecode=False):

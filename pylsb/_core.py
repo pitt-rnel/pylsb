@@ -11,6 +11,19 @@ user_msg_defs: Dict[int, Type["MessageData"]] = {}
 
 msg_defs: ChainMap[int, Type["MessageData"]] = ChainMap(core_msg_defs, user_msg_defs)
 
+
+def msg_def(msg_cls, *args, **kwargs):
+    """Decorator to add user message definitions."""
+    user_msg_defs[msg_cls.type_id] = msg_cls
+    return msg_cls
+
+
+def core_def(msg_cls, *args, **kwargs):
+    """Decorator to add core message definitions."""
+    core_msg_defs[msg_cls.type_id] = msg_cls
+    return msg_cls
+
+
 # Field type name to ctypes
 ctypes_map = {
     "char": ctypes.c_char,
@@ -96,6 +109,9 @@ class MessageData(ctypes.Structure):
                 )
             )
 
+    def __str__(self):
+        return self.pretty_print()
+
 
 class MessageHeader(ctypes.Structure):
     _fields_ = [
@@ -173,75 +189,60 @@ class Message:
 
 
 # START OF LSB INTERNAL MESSAGE DEFINITIONS
+@core_def
 class EXIT(MessageData):
     type_id: ClassVar[int] = MT_EXIT
     type_name: ClassVar[str] = "EXIT"
 
 
-core_msg_defs[MT_EXIT] = EXIT
-
-
+@core_def
 class KILL(MessageData):
     type_id: ClassVar[int] = MT_KILL
     type_name: ClassVar[str] = "KILL"
 
 
-core_msg_defs[MT_KILL] = KILL
-
-
+@core_def
 class ACKNOWLEDGE(MessageData):
     type_id: ClassVar[int] = MT_ACKNOWLEDGE
     type_name: ClassVar[str] = "ACKNOWLEDGE"
 
 
-core_msg_defs[MT_ACKNOWLEDGE] = ACKNOWLEDGE
-
-
+@core_def
 class CONNECT(MessageData):
     _fields_ = [("logger_status", ctypes.c_short), ("daemon_status", ctypes.c_short)]
     type_id: ClassVar[int] = MT_CONNECT
     type_name: ClassVar[str] = "CONNECT"
 
 
-core_msg_defs[MT_CONNECT] = CONNECT
-
-
+@core_def
 class SUBSCRIBE(MessageData):
     _fields_ = [("msg_type", MSG_TYPE)]
     type_id: ClassVar[int] = MT_SUBSCRIBE
     type_name: ClassVar[str] = "SUBSCRIBE"
 
 
-core_msg_defs[MT_SUBSCRIBE] = SUBSCRIBE
-
-
+@core_def
 class UNSUBSCRIBE(MessageData):
     _fields_ = [("msg_type", MSG_TYPE)]
     type_id: ClassVar[int] = MT_UNSUBSCRIBE
     type_name: ClassVar[str] = "UNSUBSCRIBE"
 
 
-core_msg_defs[MT_UNSUBSCRIBE] = UNSUBSCRIBE
-
-
+@core_def
 class PAUSE_SUBSCRIPTION(MessageData):
     _fields_ = [("msg_type", MSG_TYPE)]
     type_id: ClassVar[int] = MT_PAUSE_SUBSCRIPTION
     type_name: ClassVar[str] = "PAUSE_SUBSCRIPTION"
 
 
-core_msg_defs[MT_PAUSE_SUBSCRIPTION] = PAUSE_SUBSCRIPTION
-
-
+@core_def
 class RESUME_SUBSCRIPTION(MessageData):
     _fields_ = [("msg_type", MSG_TYPE)]
     type_id: ClassVar[int] = MT_RESUME_SUBSCRIPTION
     type_name: ClassVar[str] = "RESUME_SUBSCRIPTION"
 
 
-core_msg_defs[MT_RESUME_SUBSCRIPTION] = RESUME_SUBSCRIPTION
-
-
+@core_def
 class FAIL_SUBSCRIBE(MessageData):
     _fields_ = [
         ("mod_id", MODULE_ID),
@@ -252,9 +253,7 @@ class FAIL_SUBSCRIBE(MessageData):
     type_name: ClassVar[str] = "FAIL_SUBSCRIBE"
 
 
-core_msg_defs[MT_FAIL_SUBSCRIBE] = FAIL_SUBSCRIBE
-
-
+@core_def
 class FAILED_MESSAGE(MessageData):
     _fields_ = [
         ("dest_mod_id", MODULE_ID),
@@ -266,27 +265,21 @@ class FAILED_MESSAGE(MessageData):
     type_name: ClassVar[str] = "FAILED_MESSAGE"
 
 
-core_msg_defs[MT_FAILED_MESSAGE] = FAILED_MESSAGE
-
-
+@core_def
 class FORCE_DISCONNECT(MessageData):
     _fields_ = [("mod_id", ctypes.c_int)]
     type_id: ClassVar[int] = MT_FORCE_DISCONNECT
     type_name: ClassVar[str] = "FORCE_DISCONNECT"
 
 
-core_msg_defs[MT_FORCE_DISCONNECT] = FORCE_DISCONNECT
-
-
+@core_def
 class MODULE_READY(MessageData):
     _fields_ = [("pid", ctypes.c_int)]
     type_id: ClassVar[int] = MT_MODULE_READY
     type_name: ClassVar[str] = "MODULE_READY"
 
 
-core_msg_defs[MT_MODULE_READY] = MODULE_READY
-
-
+@core_def
 class SAVE_MESSAGE_LOG(MessageData):
     _fields_ = [
         ("pathname", ctypes.c_char * MAX_LOGGER_FILENAME_LENGTH),
@@ -296,9 +289,7 @@ class SAVE_MESSAGE_LOG(MessageData):
     type_name: ClassVar[str] = "SAVE_MESSAGE_LOG"
 
 
-core_msg_defs[MT_SAVE_MESSAGE_LOG] = SAVE_MESSAGE_LOG
-
-
+@core_def
 class TIMING_MESSAGE(MessageData):
     _fields_ = [
         ("timing", ctypes.c_ushort * MAX_MESSAGE_TYPES),
@@ -307,9 +298,6 @@ class TIMING_MESSAGE(MessageData):
     ]
     type_id: ClassVar[int] = MT_TIMING_MESSAGE
     type_name: ClassVar[str] = "TIMING_MESSAGE"
-
-
-core_msg_defs[MT_TIMING_MESSAGE] = TIMING_MESSAGE
 
 
 def AddMessage(msg_type_id: int, msg_cls: Type[MessageData]):

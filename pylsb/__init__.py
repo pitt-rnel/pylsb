@@ -5,6 +5,7 @@ from ._core import (
     user_msg_defs,
     core_msg_defs,
     msg_defs,
+    msg_def,
     AddMessage,
 )
 

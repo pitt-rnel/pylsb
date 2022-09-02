@@ -10,28 +10,24 @@ MT_SINE_STOP = 9001
 MT_SINE_START = 9002
 
 # Create a user defined message from a ctypes.Structure or basic ctypes
+@pylsb.msg_def
 class SINE_TEST_MSG(pylsb.MessageData):
     _fields_ = [("time", ctypes.c_double), ("value", ctypes.c_double)]
 
     type_id: int = MT_SINE_TEST_MSG
     type_name: str = "SINE_TEST_MSG"
 
-    def __str__(self):
-        return self.pretty_print()
 
+@pylsb.msg_def
 class SINE_STOP(pylsb.MessageData):
     type_id: int = MT_SINE_STOP
     type_name: str = "SINE_STOP"
 
+
+@pylsb.msg_def
 class SINE_START(pylsb.MessageData):
     type_id: int = MT_SINE_START
     type_name: str = "SINE_START"
-
-
-# Add the message definition to the pylsb module
-pylsb.AddMessage(MT_SINE_TEST_MSG, msg_cls=SINE_TEST_MSG)
-pylsb.AddMessage(MT_SINE_STOP, msg_cls=SINE_STOP)
-pylsb.AddMessage(MT_SINE_START, msg_cls=SINE_START)
 
 
 def publisher(server="127.0.0.1:7111", timecode=False):

@@ -14,7 +14,7 @@ def preprocess(text: str) -> str:
     text = re.sub(r"//(.*)\n", r"\n", text)
 
     # Strip Block Comments
-    text = re.sub(r"/\*(.*)\*/", r"\n", text, flags=re.DOTALL)
+    text = re.sub(r"/\*(.*?)\*/", r"\n", text, flags=re.DOTALL)
 
     # Strip Tabs
     text = re.sub(r"\t+", " ", text)
@@ -51,18 +51,39 @@ def parse_defines(text: str) -> Dict:
 def parse_typedefs(text: str) -> Dict:
     # Get simple typedefs
     typedefs = {}
-    c_typedefs = re.findall(r"\s*typedef\s*((?:\w+\s+)+)(\w+)\s*;", text)
+    c_typedefs = re.finditer(
+        r"\s*typedef\s+(?P<qual1>\w+\s+)?\s*(?P<qual2>\w+\s+)?\s*(?P<typ>\w+)\s+(?P<name>\w+)\s*;\s*$",
+        text,
+        flags=re.MULTILINE,
+    )
 
-    for typ, alias in c_typedefs:
+    for m in c_typedefs:
+        alias = m.group("name").strip()
         if alias.startswith("MDF_"):
             # TODO:Non struct message defintion. Maybe drop support?
             pass
         else:
-            # Must typedef a native type
-            ctype = ctypes_map[typ.strip()]
+            # Field type
+            qual1 = m.group("qual1")
+            qual2 = m.group("qual2")
+            typ = m.group("typ")
+
+            ftype = ""
+            if qual1:
+                ftype += qual1.strip()
+                ftype += " "
+
+            if qual2:
+                ftype += qual2.strip()
+                ftype += " "
+
+            ftype += typ.strip()
+
+            # Must be a native type
+            ctype = ctypes_map[ftype]
 
             # Create another alias for the native type
-            typedefs[alias.strip()] = ctype
+            typedefs[alias.strip()] = f"{ctype.__module__}.{ctype.__name__}"
 
     return typedefs
 
@@ -72,30 +93,43 @@ def parse_structs(msg_types, text: str) -> Dict:
 
     # Strip Newlines
     text = re.sub(r"\n", "", text)
-
     # Get Struct Definitions
     c_msg_defs = re.finditer(
-        r"typedef\s*struct\s*\{(?P<def>[\s\w;\[\]]*)\}(?P<name>[\s\w]*);", text
+        r"\s*typedef\s+struct\s*\{(?P<def>.*?)\}(?P<name>\s*\w*)\s*;", text
     )
 
     for m in c_msg_defs:
         name = m.group("name").strip()
-        # struct_name = camelcase(name.replace("MDF_", ""))
-
         fields = m.group("def").split(sep=";")
         fields = [f.strip() for f in fields if f.strip() != ""]
-
         c_fields = []
+
         for field in fields:
-            field_type, field_name = field.rsplit(sep=" ", maxsplit=1)
-            fmatch = re.match(r"(?P<name>\w*)(\[(?P<length>.*)\])?", field_name)
+            fmatch = re.match(
+                r"(?P<qual1>\w+\s+)?\s*(?P<qual2>\w+\s+)?\s*(?P<typ>\w+)\s+(?P<name>\w+)\s*(\[(?P<length>.*)\])?$",
+                field,
+            )
 
             if fmatch is None:
+                print(field)
                 raise RuntimeError("Error parsing field definition.")
 
             # Field name
             fname = fmatch.group("name").strip()
-            ftype = field_type.strip()
+            qual1 = fmatch.group("qual1")
+            qual2 = fmatch.group("qual2")
+            typ = fmatch.group("typ")
+
+            ftype = ""
+            if qual1:
+                ftype += qual1.strip()
+                ftype += " "
+
+            if qual2:
+                ftype += qual2.strip()
+                ftype += " "
+
+            ftype += typ.strip()
 
             t = ctypes_map.get(ftype)
             if t:
@@ -120,10 +154,11 @@ def generate_constant(name, value):
 
 def generate_struct(name: str, fields):
     assert not name.startswith("MDF_")
-
     f = []
     fnum = len(fields)
     for i, (fname, ftyp, flen) in enumerate(fields, start=1):
+        if flen and re.search(r"/", flen):
+            flen = "int(" + flen + ")"
         nl = ",\n" if i < fnum else ""
         f.append(f"        (\"{fname}\", {ftyp}{' * ' + flen if flen else ''}){nl}")
 
@@ -147,6 +182,8 @@ def generate_msg_def(name: str, fields):
     f = []
     fnum = len(fields)
     for i, (fname, ftyp, flen) in enumerate(fields, start=1):
+        if flen and re.search(r"/", flen):
+            flen = "int(" + flen + ")"
         nl = ",\n" if i < fnum else ""
         f.append(f"        (\"{fname}\", {ftyp}{' * ' + flen if flen else ''}){nl}")
 

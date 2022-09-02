@@ -19,6 +19,7 @@ ctypes_map = {
     "int": ctypes.c_int,
     "signed int": ctypes.c_uint,
     "unsigned int": ctypes.c_uint,
+    "unsigned": ctypes.c_uint,
     "short": ctypes.c_short,
     "signed short": ctypes.c_short,
     "unsigned short": ctypes.c_ushort,
@@ -163,10 +164,12 @@ class Message:
     @property
     def name(self) -> str:
         return self.data.type_name
-    
+
     # custom print for message data
     def pretty_print(self, add_tabs=0):
-        return self.header.pretty_print(add_tabs) + "\n" + self.data.pretty_print(add_tabs)
+        return (
+            self.header.pretty_print(add_tabs) + "\n" + self.data.pretty_print(add_tabs)
+        )
 
 
 # START OF LSB INTERNAL MESSAGE DEFINITIONS

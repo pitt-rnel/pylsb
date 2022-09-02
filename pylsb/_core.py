@@ -20,6 +20,7 @@ ctypes_map = {
     "int": ctypes.c_int,
     "signed int": ctypes.c_uint,
     "unsigned int": ctypes.c_uint,
+    "unsigned": ctypes.c_uint,
     "short": ctypes.c_short,
     "signed short": ctypes.c_short,
     "unsigned short": ctypes.c_ushort,

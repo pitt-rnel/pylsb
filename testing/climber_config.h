@@ -566,7 +566,7 @@ typedef struct
 typedef struct
 {
 	SPIKE_SNIPPET ss[SNIPPETS_PER_MESSAGE];
-} MDF_SPIKE_SNIPPET; //contains SNIPPETS_PER_MESSAGE spikes worth of data to reduce message load
+} MDF_SPIKE_SNIPPETS; //contains SNIPPETS_PER_MESSAGE spikes worth of data to reduce message load
 
 typedef struct
 {
@@ -585,7 +585,7 @@ typedef struct
 typedef struct
 {
 	REJECTED_SNIPPET rs[SNIPPETS_PER_MESSAGE];
-} MDF_REJECTED_SNIPPET;
+} MDF_REJECTED_SNIPPETS;
 
 typedef struct
 {

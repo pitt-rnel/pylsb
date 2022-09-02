@@ -30,7 +30,7 @@ mod = pylsb.Client()
 app = Dash(
     __name__,
     title="LSB Example",
-    external_stylesheets=["https://codepen.io/chriddyp/pen/bWLwgP.css"],
+    external_stylesheets=["https://codepen.io/chriddyp/pen/bWLwgP.css"]
 )
 
 msg_queue = Queue()  # global message queue

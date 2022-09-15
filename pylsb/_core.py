@@ -303,4 +303,3 @@ class TIMING_MESSAGE(MessageData):
 def AddMessage(msg_type_id: int, msg_cls: Type[MessageData]):
     """Add a user message definition to the LSB module"""
     msg_defs.maps[1][msg_type_id] = msg_cls
-

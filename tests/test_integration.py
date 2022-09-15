@@ -15,9 +15,7 @@ class TestRunning(unittest.TestCase):
             debug=False,
             send_msg_timing=True,
         )
-        self.manager_thread = threading.Thread(
-            target=self.manager.run,
-        )
+        self.manager_thread = threading.Thread(target=self.manager.run,)
         self.manager_thread.start()
         time.sleep(0.1)
 

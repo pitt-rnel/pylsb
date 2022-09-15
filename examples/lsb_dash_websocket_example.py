@@ -1,4 +1,13 @@
-from dash_extensions.enrich import DashProxy, html, dcc, Input, Output, State, NoOutputTransform, callback_context
+from dash_extensions.enrich import (
+    DashProxy,
+    html,
+    dcc,
+    Input,
+    Output,
+    State,
+    NoOutputTransform,
+    callback_context,
+)
 from dash_extensions import WebSocket
 import pylsb, ctypes, threading, time, sys
 
@@ -9,6 +18,7 @@ MT_SINE_START = 9002
 # instantiate client globally
 mod = pylsb.Client()
 
+
 def send_lsb_signal(MT: int):
     try:
         if not mod.connected:
@@ -17,11 +27,14 @@ def send_lsb_signal(MT: int):
     except:
         print("Error sending LSB signal")
 
+
 # Create example app.
-app = DashProxy(__name__,
+app = DashProxy(
+    __name__,
     transforms=[NoOutputTransform()],
     title="LSB Dash Websocket Example",
-    external_stylesheets=["https://codepen.io/chriddyp/pen/bWLwgP.css"])
+    external_stylesheets=["https://codepen.io/chriddyp/pen/bWLwgP.css"],
+)
 
 init_array = [float("nan")] * 100
 app.layout = html.Div(
@@ -32,23 +45,39 @@ app.layout = html.Div(
         html.Div(
             dcc.Graph(
                 id="graph",
-                figure={"data": [{"x": init_array, "y": init_array, "type": "scatter"}]},
+                figure={
+                    "data": [{"x": init_array, "y": init_array, "type": "scatter"}]
+                },
             )
         ),
         html.Div(
             [
-                html.Button("Start", id="start-button", n_clicks=0, className="button-primary"),
-                html.Button("Pause", id="pause-button", n_clicks=0, className="button-primary")
+                html.Button(
+                    "Start", id="start-button", n_clicks=0, className="button-primary"
+                ),
+                html.Button(
+                    "Pause", id="pause-button", n_clicks=0, className="button-primary"
+                ),
             ]
         ),
         html.Div(
             [
                 html.Br(),
                 html.P(
-                    ["Use with ", html.Code("example_ws_server.py"), " and ", html.Code("example_sinewave.py --pub"), ".", html.Br(), "Refresh this page after starting ", html.Code("example_ws_server.py"), "."]
-                )
+                    [
+                        "Use with ",
+                        html.Code("example_ws_server.py"),
+                        " and ",
+                        html.Code("example_sinewave.py --pub"),
+                        ".",
+                        html.Br(),
+                        "Refresh this page after starting ",
+                        html.Code("example_ws_server.py"),
+                        ".",
+                    ]
+                ),
             ]
-        )
+        ),
     ]
 )
 
@@ -77,6 +106,7 @@ app.clientside_callback(
     update_graph, Output("graph", "figure"), Input("figure-store", "data")
 )
 
+
 @app.callback(Input("start-button", "n_clicks"), Input("pause-button", "n_clicks"))
 def start_callback(start, pause):
     button_clicked = callback_context.triggered_id
@@ -84,6 +114,7 @@ def start_callback(start, pause):
         send_lsb_signal(MT_SINE_START)
     elif button_clicked == "pause-button" and pause:
         send_lsb_signal(MT_SINE_STOP)
+
 
 if __name__ == "__main__":
     app.run(

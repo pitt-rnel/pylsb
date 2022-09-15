@@ -61,4 +61,3 @@ MODULE_ID = ctypes.c_short
 HOST_ID = ctypes.c_short
 MSG_TYPE = ctypes.c_int
 MSG_COUNT = ctypes.c_int
-

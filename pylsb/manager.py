@@ -52,6 +52,9 @@ class Module:
 
 
 class MessageManager:
+
+    _keep_running = True
+
     def __init__(
         self,
         ip_address: Union[str, int] = socket.INADDR_ANY,
@@ -461,9 +464,12 @@ class MessageManager:
             self.send_timing_message(wlist)
             self.t_last_message_count = time.time()
 
+    def close(self):
+        self._keep_running = False
+
     def run(self):
         try:
-            while True:
+            while self._keep_running:
                 rlist, _, _ = select.select(
                     self.modules.keys(), [], [], self.read_timeout
                 )

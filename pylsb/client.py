@@ -188,7 +188,7 @@ class Client(object):
         if ctrl_msg == "Subscribe":
             msg = SUBSCRIBE()
         elif ctrl_msg == "Unsubscribe":
-            msg = SUBSCRIBE()
+            msg = UNSUBSCRIBE()
         elif ctrl_msg == "PauseSubscription":
             msg = PAUSE_SUBSCRIPTION()
         elif ctrl_msg == "ResumeSubscription":

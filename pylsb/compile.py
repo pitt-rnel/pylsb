@@ -291,7 +291,10 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "-i, -I", nargs="*", dest="include_files", help="Files to parse",
+        "-i, -I",
+        nargs="*",
+        dest="include_files",
+        help="Files to parse",
     )
     args = parser.parse_args()
     compile(args.include_files)

@@ -1,48 +1,46 @@
+"""
+Compile User Message Defintions first:
+
+$ python -m pylsb.compile -i ../testing/mjvr_types.h ../testing/climber_config.h > ./examples/rnel_msg_defs.py
+
+After compiling, import your definitions:
+from rnel_msg_defs import *
+"""
+
 import sys
 import time
 
 sys.path.append("../")
 
-from pylsb import *
-
-# Order of included files is important
-include_files = [
-    "../testing/mjvr_types.h",
-    "../testing/climber_config.h",
-]
-
-# Parse the C header files with message definitions.
-parse_files(include_files)
+import pylsb
+from rnel_msg_defs import *
 
 
 def publisher(server="127.0.0.1:7111", timecode=False):
     # Setup Client
-    mod = Client(timecode=timecode)
+    mod = pylsb.Client(timecode=timecode)
     mod.connect(server_name=server)
 
-    for name, msg in LSB.msg_defs.items():
-        mt = LSB.MT.get(name)
-        if not mt or mt < 1000:
+    for msg_type, msg_cls in pylsb.msg_defs.items():
+        if msg_type < 1000:
             continue
-        print(name)
-        mod.send_message(msg())
+
+        print(msg_cls.type_name)
+        mod.send_message(msg_cls())
         time.sleep(0.100)
 
-    mod.send_signal("Exit")
+    mod.send_signal(pylsb.MT_EXIT)
     print("Goodbye")
 
 
 def subscriber(server="127.0.0.1:7111", timecode=False):
     # Setup Client
-    mod = Client(timecode=timecode)
+    mod = pylsb.Client(timecode=timecode)
     mod.connect(server_name=server)
 
     # Select the messages to receive
-    mts = LSB.MT.values()
-    for mt in mts:
-        if mt > 1000:
-            mod.subscribe([LSB.MT_BY_ID[mt]])
-    mod.subscribe(["Exit"])
+    mod.subscribe([msg_type for msg_type in pylsb.msg_defs.keys() if msg_type > 1000])
+    mod.subscribe([pylsb.MT_EXIT])
 
     print("Waiting for packets...")
     while True:
@@ -50,11 +48,14 @@ def subscriber(server="127.0.0.1:7111", timecode=False):
             msg = mod.read_message(timeout=0.200)
 
             if msg is not None:
-                # msg.hexdump()
-                print(msg)
-                if msg.name == "Exit":
+                if msg.name == "ACKNOWLEDGE":
+                    pass
+                elif msg.name == "EXIT":
                     print("Goodbye.")
                     break
+                else:
+                    print(msg.name)
+
         except KeyboardInterrupt:
             break
 

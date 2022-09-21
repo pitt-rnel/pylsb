@@ -7,8 +7,8 @@ import random
 import ctypes
 import os
 
-import pylsb.internal_types
-from pylsb.internal_types import Message, MessageHeader, LSB
+from ._core import *
+from .constants import *
 
 from typing import Dict, List, Tuple, Set, Type, Union, Optional
 from dataclasses import dataclass
@@ -26,15 +26,16 @@ class Module:
     connected: bool = False
     is_logger: bool = False
 
-    def send_message(self, msg: Message):
-        self.conn.sendall(msg.pack())
+    def send_message(self, header: MessageHeader, payload: Union[bytes, MessageData]):
+        self.conn.sendall(header)
+        self.conn.sendall(payload)
 
     def send_ack(self):
         # Just send a header
         header = self.header_cls()
-        header.msg_type = LSB.MT["Acknowledge"]
+        header.msg_type = MT_ACKNOWLEDGE
         header.send_time = time.time()
-        header.src_mod_id = LSB.constants.MID_MESSAGE_MANAGER
+        header.src_mod_id = MID_MESSAGE_MANAGER
         header.dest_mod_id = self.id
         header.num_data_bytes = 0
 
@@ -66,7 +67,10 @@ class MessageManager:
         self.ip_address = ip_address
         self.port = port
 
-        self.header_cls = Message.set_header_cls(timecode)
+        self.header_cls = get_header_cls(timecode)
+        self.header_size = ctypes.sizeof(self.header_cls)
+        self.header_buffer = bytearray(self.header_size)
+        self.header_view = memoryview(self.header_buffer)
 
         self.read_timeout = 0.200
         self.write_timeout = 0  # c++ message manager uses timeout = 0 for all modules except logger modules, which uses -1 (blocking)
@@ -117,7 +121,8 @@ class MessageManager:
 
         self.modules[self.listen_socket] = mm_module
 
-        self._buffer = bytearray(1024**2)
+        self.data_buffer = bytearray(1024**2)
+        self.data_view = memoryview(self.data_buffer)
 
         # Address Reuse allowed for testing
         if debug:
@@ -140,13 +145,13 @@ class MessageManager:
         console.setFormatter(formatter)
         self.logger.addHandler(console)
 
-    def assign_module_id(self):
+    def assign_module_id(self) -> int:
         current_ids = [mod.id for mod in self.modules.values()]
 
-        MAX_DYN_IDS = LSB.constants.MAX_MODULES - LSB.constants.DYN_MOD_ID_START
+        MAX_DYN_IDS = MAX_MODULES - DYN_MOD_ID_START
         for i in range(0, MAX_DYN_IDS):
 
-            mod_id = self.next_dynamic_mod_id_offset + LSB.constants.DYN_MOD_ID_START
+            mod_id = self.next_dynamic_mod_id_offset + DYN_MOD_ID_START
             self.next_dynamic_mod_id_offset += 1
             if self.next_dynamic_mod_id_offset == MAX_DYN_IDS:
                 self.next_dynamic_mod_id_offset = 0
@@ -159,6 +164,12 @@ class MessageManager:
         self.logger.error(
             f"MessageManager::assign_module_id: All valid dynamic IDs are in use"
         )
+
+        raise RuntimeError("Exceeded maximum limit of allowed modules.")
+
+    @property
+    def header(self) -> MessageHeader:
+        return self.header_cls.from_buffer(self.header_view)
 
     def connect_module(
         self, src_module: Module, msg: Message
@@ -201,12 +212,12 @@ class MessageManager:
         self.remove_module(src_module)
 
     def add_subscription(self, src_module: Module, msg: Message):
-        sub = pylsb.internal_types.Subscribe.from_buffer(msg.data)
+        sub = SUBSCRIBE.from_buffer(msg.data)
         self.subscriptions[sub.msg_type].add(src_module)
         self.logger.info(f"SUBSCRIBE- {src_module!s} to MT:{sub.msg_type}")
 
     def remove_subscription(self, src_module: Module, msg: Message):
-        sub = pylsb.internal_types.Unsubscribe.from_buffer(msg.data)
+        sub = UNSUBSCRIBE.from_buffer(msg.data)
         # Silently let modules unsubscribe from messages that they are not subscribed to.
         self.subscriptions[sub.msg_type].discard(src_module)
         self.logger.info(f"UNSUBSCRIBE- {src_module!s} to MT:{sub.msg_type}")
@@ -218,38 +229,44 @@ class MessageManager:
         self.remove_subscription(src_module, msg)
 
     def register_module_ready(self, src_module: Module, msg: Message):
-        mr = pylsb.internal_types.ModuleReady.from_buffer(msg.data)
+        mr = MODULE_READY.from_buffer(msg.data)
         src_module.pid = mr.pid
 
-    def read_message(self, sock: socket.socket) -> Optional[Message]:
-        msg = Message(buffer=self._buffer)
-
+    def read_message(self, sock: socket.socket) -> bool:
         # Read LSB Header Section
-        nbytes = sock.recv_into(msg.hdr_buffer, msg.header_size, socket.MSG_WAITALL)
+        nbytes = sock.recv_into(
+            self.header_buffer, self.header_size, socket.MSG_WAITALL
+        )
 
-        if nbytes != msg.header_size:
+        if nbytes != self.header_size:
             mod = self.modules[sock]
             self.logger.warning(
                 f"DROPPING - {mod!s} - No header returned from sock.recv_into."
             )
             self.remove_module(mod)
-            return None
+            return False
 
         # Read Data Section
-        if msg.data_size:
-            nbytes = sock.recv_into(msg.data_buffer, msg.data_size, socket.MSG_WAITALL)
+        data_size = self.header.num_data_bytes
+        if data_size:
+            nbytes = sock.recv_into(self.data_buffer, data_size, socket.MSG_WAITALL)
 
-            if nbytes != msg.data_size:
+            if nbytes != data_size:
                 mod = self.modules[sock]
                 self.logger.warning(
                     f"DROPPING - {mod!s} - No data returned from sock.recv_into."
                 )
                 self.remove_module(mod)
-                return None
+                return False
 
-        return msg
+        return True
 
-    def forward_message(self, msg: Message, wlist: List[socket.socket]):
+    def forward_message(
+        self,
+        header: MessageHeader,
+        data: Union[bytes, MessageData],
+        wlist: List[socket.socket],
+    ):
         """Forward a message from other modules
         The given message will be forwarded to:
             - all subscribed logger modules (ALWAYS)
@@ -257,25 +274,25 @@ class MessageManager:
             - if the message has no destination address, it will be forwarded to all subscribed modules
         """
 
-        dest_mod_id = msg.header.dest_mod_id
-        dest_host_id = msg.header.dest_host_id
+        dest_mod_id = header.dest_mod_id
+        dest_host_id = header.dest_host_id
 
         # Verify that the module & host ids are valid
-        if dest_mod_id < 0 or dest_mod_id > LSB.constants.MAX_MODULES:
+        if dest_mod_id < 0 or dest_mod_id > MAX_MODULES:
             self.logger.error(
                 f"MessageManager::forward_message: Got invalid dest_mod_id [{dest_mod_id}]"
             )
 
-        if dest_host_id < 0 or dest_host_id > LSB.constants.MAX_HOSTS:
+        if dest_host_id < 0 or dest_host_id > MAX_HOSTS:
             self.logger.error(
                 f"MessageManager::forward_message: Got invalid dest_host_id [{dest_host_id}]"
             )
 
         # Always forward to logger modules
-        self.send_to_loggers(msg, wlist)
+        self.send_to_loggers(header, data, wlist)
 
         # Subscriber set for this message type
-        subscribers = self.subscriptions[msg.header.msg_type]
+        subscribers = self.subscriptions[header.msg_type]
 
         # Send to a specific destination if it is subscribed
         if dest_mod_id > 0:
@@ -283,17 +300,17 @@ class MessageManager:
                 if module.id == dest_mod_id:
                     if module.conn in wlist:
                         try:
-                            module.send_message(msg)
+                            module.send_message(header, data)
                         except ConnectionError as err:
                             self.logger.error(
                                 f"Connection Error on write to {module!s} - {err!s}"
                             )
                             print("x", end="", flush=True)
-                            self.send_failed_message(module, msg, time.time(), wlist)
+                            self.send_failed_message(module, header, time.time(), wlist)
                         return
                     else:
                         print("x", end="", flush=True)
-                        self.send_failed_message(module, msg, time.time(), wlist)
+                        self.send_failed_message(module, header, time.time(), wlist)
                         return
             return  # if specified dest_mod_id is not in subscribers, do not send message (other than to loggers)
 
@@ -301,145 +318,144 @@ class MessageManager:
         for module in subscribers:
             if module.conn in wlist:
                 try:
-                    module.send_message(msg)
+                    module.send_message(header, data)
                 except ConnectionError as err:
                     self.logger.error(
                         f"Connection Error on write to {module!s} - {err!s}"
                     )
                     print("x", end="", flush=True)
-                    self.send_failed_message(module, msg, time.time(), wlist)
+                    self.send_failed_message(module, header, time.time(), wlist)
             else:
                 print("x", end="", flush=True)
-                self.send_failed_message(module, msg, time.time(), wlist)
+                self.send_failed_message(module, header, time.time(), wlist)
 
-    def send_to_loggers(self, msg: Message, wlist: List[socket.socket]):
+    def send_to_loggers(
+        self, header: MessageHeader, payload, wlist: List[socket.socket]
+    ):
         for module in self.logger_modules:
             if module.conn not in wlist:
                 # Block until logger is ready
                 select.select([], [module.conn], [], None)
             try:
-                module.send_message(msg)
+                module.send_message(header, payload)
             except ConnectionError as err:
                 self.logger.error(f"Connection Error on write to {module!s} - {err!s}")
                 print("x", end="", flush=True)
                 self.send_failed_message(
-                    module, msg, time.time(), wlist
+                    module, header, time.time(), wlist
                 )  # this could result in inifite recursion, this is prevented by send_failed_message returning if failed message type is failed_message.
 
     def send_ack(self, src_module: Module, wlist: List[socket.socket]):
         # src_module.send_ack()
 
         header = self.header_cls()
-        header.msg_type = LSB.MT["Acknowledge"]
+        header.msg_type = MT_ACKNOWLEDGE
         header.send_time = time.time()
-        header.src_mod_id = LSB.constants.MID_MESSAGE_MANAGER
+        header.src_mod_id = MID_MESSAGE_MANAGER
         header.dest_mod_id = src_module.id
         header.num_data_bytes = 0
 
-        ack_msg = Message(header, buffer=self._buffer)
         try:
-            src_module.send_message(ack_msg)
+            src_module.send_message(header, b"")
         except ConnectionError as err:
             self.logger.error(f"Connection Error on write to {src_module!s} - {err!s}")
             print("x", end="", flush=True)
-            self.send_failed_message(src_module, ack_msg, time.time(), wlist)
+            self.send_failed_message(src_module, header, time.time(), wlist)
 
         # Always forward to logger modules
-        self.send_to_loggers(ack_msg, wlist)
+        self.send_to_loggers(header, b"", wlist)
 
     def send_failed_message(
         self,
         dest_module: Module,
-        msg: Message,
+        header: MessageHeader,
         time_of_failure: float,
         wlist: List[socket.socket],
     ):
 
         header = self.header_cls()
-        data = pylsb.internal_types.FailedMessage()
+        data = FAILED_MESSAGE()
 
-        header.msg_type = LSB.MT["FailedMessage"]
+        header.msg_type = MT_FAILED_MESSAGE
         header.send_time = time.time()
-        header.src_mod_id = LSB.constants.MID_MESSAGE_MANAGER
+        header.src_mod_id = MID_MESSAGE_MANAGER
         header.num_data_bytes = ctypes.sizeof(data)
 
         data.dest_mod_id = dest_module.id
         data.time_of_failure = time_of_failure
-        data.msg_header = msg.header
-
-        failed_msg = Message(header, data, buffer=self._buffer)
+        data.msg_header = header
 
         if (
-            failed_msg.data.msg_header.msg_type == LSB.MT["FailedMessage"]
+            data.msg_header.msg_type == MT_FAILED_MESSAGE
         ):  # avoid unlikely infinite recursion
             return
 
         # send to logger modules AND modules subscribed to FAILED_MESSAGE
-        self.forward_message(failed_msg, wlist)
+        self.forward_message(header, data, wlist)
 
         # add to message count
-        self.message_counts[failed_msg.header.msg_type] += 1
+        self.message_counts[header.msg_type] += 1
 
     def send_timing_message(self, wlist: List[socket.socket]):
 
         header = self.header_cls()
-        data = pylsb.internal_types.TimingMessage()
+        data = TIMING_MESSAGE()
 
-        header.msg_type = LSB.MT["TimingMessage"]
+        header.msg_type = MT_TIMING_MESSAGE
         header.send_time = time.time()
-        header.src_mod_id = LSB.constants.MID_MESSAGE_MANAGER
+        header.src_mod_id = MID_MESSAGE_MANAGER
         header.num_data_bytes = ctypes.sizeof(data)
 
-        tmsg = Message(header, data, buffer=self._buffer)
-        tmsg.data.send_time = time.time()
+        data.send_time = time.time()
 
         for (mt, count) in self.message_counts.items():
-            tmsg.data.timing[mt] = count
+            data.timing[mt] = count
         self.message_counts.clear()
 
         for mod in self.modules.values():
-            tmsg.data.ModulePID[mod.id] = mod.pid
+            data.ModulePID[mod.id] = mod.pid
 
-        self.forward_message(tmsg, wlist)
+        self.forward_message(header, data, wlist)
 
-    def process_message(
-        self, src_module: Module, msg: Message, wlist: List[socket.socket]
-    ):
-        msg_name = LSB.MT_BY_ID.get(msg.header.msg_type)
+    @property
+    def message(self) -> Message:
+        hdr = self.header
+        return Message(hdr, hdr.get_data.from_buffer(self.data_buffer))
 
-        if msg_name == "Connect":
-            if self.connect_module(src_module, msg):
+    def process_message(self, src_module: Module, wlist: List[socket.socket]):
+        hdr = self.header
+        msg_type = hdr.msg_type
+
+        if msg_type == MT_CONNECT:
+            if self.connect_module(src_module, self.message):
                 self.send_ack(src_module, wlist)
                 self.logger.info(f"CONNECT - {src_module!s}")
-        elif msg_name == "Disconnect":
+        elif msg_type == MT_DISCONNECT:
             self.send_ack(src_module, wlist)
             self.disconnect_module(src_module)
             self.logger.info(f"DISCONNECT - {src_module!s}")
-        elif msg_name == "Subscribe":
-            self.add_subscription(src_module, msg)
+        elif msg_type == MT_SUBSCRIBE:
+            self.add_subscription(src_module, self.message)
             self.send_ack(src_module, wlist)
-        elif msg_name == "Unsubscribe":
-            self.remove_subscription(src_module, msg)
+        elif msg_type == MT_UNSUBSCRIBE:
+            self.remove_subscription(src_module, self.message)
             self.send_ack(src_module, wlist)
-        elif msg_name == "PauseSubscription":
-            self.pause_subscription(src_module, msg)
+        elif msg_type == MT_PAUSE_SUBSCRIPTION:
+            self.pause_subscription(src_module, self.message)
             self.send_ack(src_module, wlist)
-        elif msg_name == "ResumeSubscription":
-            self.resume_subscription(src_module, msg)
+        elif msg_type == MT_RESUME_SUBSCRIPTION:
+            self.resume_subscription(src_module, self.message)
             self.send_ack(src_module, wlist)
-        elif msg_name == "ModuleReady":  # used to store module pids
-            self.register_module_ready(src_module, msg)
+        elif msg_type == MT_MODULE_READY:
+            # used to store module pids
+            self.register_module_ready(src_module, self.message)
         else:
-            if msg_name:
-                self.logger.debug(f"FORWARD - {msg_name} from {src_module!s}")
-            else:
-                self.logger.debug(
-                    f"FORWARD - {msg.header.msg_type} from {src_module!s}"
-                )
-            self.forward_message(msg, wlist)
+            self.logger.debug(f"FORWARD - msg_type:{hdr.msg_type} from {src_module!s}")
+            data = self.data_view[: hdr.num_data_bytes]
+            self.forward_message(hdr, data, wlist)
 
         # message counts
-        self.message_counts[msg.header.msg_type] += 1
+        self.message_counts[hdr.msg_type] += 1
         if (
             self.b_send_msg_timing
             and (time.time() - self.t_last_message_count)
@@ -489,7 +505,7 @@ class MessageManager:
                     for client_socket in rlist:
                         src = self.modules[client_socket]
                         try:
-                            msg = self.read_message(client_socket)
+                            got_msg = self.read_message(client_socket)
                         except ConnectionError as err:
                             self.logger.error(
                                 f"Connection Error on read, disconnecting  {src!s} - {err!s}"
@@ -497,8 +513,8 @@ class MessageManager:
                             self.disconnect_module(src)
                             continue
 
-                        if msg:
-                            self.process_message(src, msg, wlist)
+                        if got_msg:
+                            self.process_message(src, wlist)
 
         except KeyboardInterrupt:
             self.logger.info("Stopping Message Manager")

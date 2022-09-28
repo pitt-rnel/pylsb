@@ -1,5 +1,7 @@
+from io import TextIOWrapper
 import re
-from typing import List, Dict
+from typing import List, Dict, Optional
+
 from ._core import ctypes_map
 
 
@@ -223,7 +225,16 @@ class {name}(pylsb.MessageData):
     return template
 
 
-def parse_file(filename, seq: int = 1):
+def print_content(
+    content: str = "", end: str = "\n", out_file: Optional[TextIOWrapper] = None
+):
+    """Print content to the console and optionally write to file"""
+    print(content, end=end)
+    if out_file and not out_file.closed:
+        out_file.write(f"{content}{end}")
+
+
+def parse_file(filename, seq: int = 1, out_filename: Optional[str] = None):
     """Parse a C header file for message definitions.
     Notes:
         * Does not follow other #includes
@@ -233,54 +244,68 @@ def parse_file(filename, seq: int = 1):
     with open(filename, "r") as f:
         text = f.read()
 
-    text = preprocess(text)
-    defines = parse_defines(text)
-    typedefs = parse_typedefs(text)
-    structs = parse_structs(defines["MT"], text)
+    out_file = None
+    if out_filename:
+        mode = "w" if seq == 1 else "a"
+        out_file = open(out_filename, mode=mode)
 
-    if seq == 1:
-        print("import ctypes")
-        print("import pylsb")
-        print("from pylsb.constants import *")
-        print()
+    try:
+        text = preprocess(text)
+        defines = parse_defines(text)
+        typedefs = parse_typedefs(text)
+        structs = parse_structs(defines["MT"], text)
 
-    print(f"# User Constants: {filename}")
-    for name, value in defines["constants"].items():
-        print(generate_constant(name, value))
+        if seq == 1:
+            print_content("import ctypes", out_file=out_file)
+            print_content("import pylsb", out_file=out_file)
+            print_content("from pylsb.constants import *", out_file=out_file)
+            print_content(out_file=out_file)
 
-    print()
-    print(f"# User Message IDs: {filename}")
-    for name, value in defines["MT"].items():
-        print(generate_constant(name, value))
+        print_content(f"# User Constants: {filename}", out_file=out_file)
+        for name, value in defines["constants"].items():
+            print_content(generate_constant(name, value), out_file=out_file)
 
-    print()
-    print(f"# User Module IDs: {filename}")
-    for name, value in defines["MID"].items():
-        print(generate_constant(name, value))
+        print_content(out_file=out_file)
+        print_content(f"# User Message IDs: {filename}", out_file=out_file)
+        for name, value in defines["MT"].items():
+            print_content(generate_constant(name, value), out_file=out_file)
 
-    print()
-    print(f"# User Type Definitions: {filename}")
-    for name, value in typedefs.items():
-        print(generate_constant(name, value))
+        print_content(out_file=out_file)
+        print_content(f"# User Module IDs: {filename}", out_file=out_file)
+        for name, value in defines["MID"].items():
+            print_content(generate_constant(name, value), out_file=out_file)
 
-    ctypes_map.update(typedefs)
+        print_content(out_file=out_file)
+        print_content(f"# User Type Definitions: {filename}", out_file=out_file)
+        for name, value in typedefs.items():
+            print_content(generate_constant(name, value), out_file=out_file)
 
-    print()
-    print(f"# User Message Definitions: {filename}", end="\n\n")
+        ctypes_map.update(typedefs)
 
-    for name, fields in structs.items():
-        if name.startswith("MDF_"):
-            if fields is not None:
-                print(generate_msg_def(name, fields), end="")
+        print_content()
+        print_content(
+            f"# User Message Definitions: {filename}", end="\n\n", out_file=out_file
+        )
+
+        for name, fields in structs.items():
+            if name.startswith("MDF_"):
+                if fields is not None:
+                    print_content(
+                        generate_msg_def(name, fields), end="", out_file=out_file
+                    )
+                else:
+                    print_content(generate_sig_def(name), end="", out_file=out_file)
             else:
-                print(generate_sig_def(name), end="")
-        else:
-            print(generate_struct(name, fields), end="")
+                print_content(generate_struct(name, fields), end="", out_file=out_file)
+
+    finally:
+        if out_file and not out_file.closed:
+            out_file.close()
 
 
-def compile(include_files: List):
+def compile(include_files: List, out_filename: Optional[str]):
     for n, f in enumerate(include_files, start=1):
-        parse_file(f, seq=n)
+        parse_file(f, seq=n, out_filename=out_filename)
 
 
 if __name__ == "__main__":
@@ -296,5 +321,10 @@ if __name__ == "__main__":
         dest="include_files",
         help="Files to parse",
     )
+    parser.add_argument(
+        "-o, -O",
+        dest="output_file",
+        help="Output python file",
+    )
     args = parser.parse_args()
-    compile(args.include_files)
+    compile(args.include_files, args.output_file)
